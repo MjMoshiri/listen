@@ -43,7 +43,7 @@ class JobQueue {
   }
   private async processNext() {
     console.log(`ProcessNext called. IsProcessing: ${this.isProcessing}, Queue length: ${this.jobs.length}`);
-    
+
     if (this.isProcessing || this.jobs.length === 0) {
       return;
     }
@@ -74,7 +74,7 @@ class JobQueue {
     try {
       // Extract chapters from EPUB
       const chapters = await processEpubFile(job.filePath);
-      
+
       console.log(`Extracted ${chapters.length} chapters for book ${job.bookId}`);
 
       // Save chapters to database
@@ -96,7 +96,7 @@ class JobQueue {
       console.log(`Successfully processed book ${job.bookId} with ${chapters.length} chapters`);
     } catch (error) {
       console.error(`Failed to process book ${job.bookId}:`, error);
-      
+
       // Optionally, mark the book as failed or add retry logic
       // For now, we'll just log the error
     }
@@ -129,7 +129,7 @@ class CleaningQueue {
   }
   private async processNext() {
     console.log(`CleaningQueue processNext called. IsProcessing: ${this.isProcessing}, Queue length: ${this.jobs.length}`);
-    
+
     if (this.isProcessing || this.jobs.length === 0) return;
     this.isProcessing = true;
     const job = this.jobs.shift();
@@ -143,9 +143,9 @@ class CleaningQueue {
     }
     this.isProcessing = false;
     if (this.jobs.length > 0) setTimeout(() => this.processNext(), 100);
-  }  private async processChapter(job: ChapterCleaningJob) {
+  } private async processChapter(job: ChapterCleaningJob) {
     console.log(`Starting to clean chapter ${job.chapterId}`);
-    
+
     // Use Gemini API to clean text
     const { GoogleGenAI } = await import('@google/genai');
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -154,15 +154,15 @@ class CleaningQueue {
       model: 'gemini-2.0-flash',
       contents: [{ parts: [{ text: `${prompt}\n\n${job.text}` }] }],
       config: { maxOutputTokens: config.maxOutputTokens, temperature: config.temperature },
-    });    const cleaned = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || job.text;
-    
+    }); const cleaned = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || job.text;
+
     console.log(`Successfully cleaned chapter ${job.chapterId}`);
-    
+
     await prisma.chapter.update({
       where: { id: job.chapterId },
       data: { audioText: cleaned, hasCleaned: true },
     });
-    
+
     console.log(`Updated chapter ${job.chapterId} with cleaned text - cleaning only, not automatically submitting for TTS`);
   }
 }
@@ -174,27 +174,27 @@ export function addChapterCleaningJob(chapterId: string, text: string) {
 // Function to clean and then process TTS for a chapter
 export async function cleanAndTTSChapter(chapterId: string) {
   console.log(`Starting clean and TTS process for chapter ${chapterId}`);
-  
-  const chapter = await prisma.chapter.findUnique({ 
-    where: { id: chapterId }, 
-    select: { 
-      text: true, 
-      audioText: true, 
-      hasAudio: true, 
-      hasCleaned: true 
-    } 
+
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: chapterId },
+    select: {
+      text: true,
+      audioText: true,
+      hasAudio: true,
+      hasCleaned: true
+    }
   });
-  
+
   if (!chapter) {
     console.error(`Chapter ${chapterId} not found`);
     return;
   }
-  
+
   if (chapter.hasAudio) {
     console.log(`Chapter ${chapterId} already has audio`);
     return;
   }
-  
+
   // Ensure text is cleaned before TTS
   await addChapterTTSJobAuto(chapterId);
 }
@@ -213,7 +213,7 @@ import { processAudioFilesFast } from './audio-simple';
 // Helper function to clean chapter text
 async function cleanChapterText(chapterId: string, text: string): Promise<string> {
   console.log(`Cleaning text for chapter ${chapterId}`);
-  
+
   try {
     // Use Gemini API to clean text
     const { GoogleGenAI } = await import('@google/genai');
@@ -224,15 +224,15 @@ async function cleanChapterText(chapterId: string, text: string): Promise<string
       contents: [{ parts: [{ text: `${prompt}\n\n${text}` }] }],
       config: { maxOutputTokens: config.maxOutputTokens, temperature: config.temperature },
     });
-    
+
     const cleaned = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || text;
-    
+
     // Update chapter with cleaned text
     await prisma.chapter.update({
       where: { id: chapterId },
       data: { audioText: cleaned, hasCleaned: true },
     });
-    
+
     console.log(`Successfully cleaned text for chapter ${chapterId}`);
     return cleaned;
   } catch (error) {
@@ -249,23 +249,23 @@ async function cleanChapterText(chapterId: string, text: string): Promise<string
 export async function addChapterTTSJobAuto(chapterId: string) {
   try {
     console.log(`Starting TTS job for chapter ${chapterId}`);
-    
+
     // Fetch chapter data
-    const chapter = await prisma.chapter.findUnique({ 
-      where: { id: chapterId }, 
-      select: { 
-        text: true, 
-        audioText: true, 
-        hasAudio: true, 
-        hasCleaned: true 
-      } 
+    const chapter = await prisma.chapter.findUnique({
+      where: { id: chapterId },
+      select: {
+        text: true,
+        audioText: true,
+        hasAudio: true,
+        hasCleaned: true
+      }
     });
-    
+
     if (!chapter) {
       console.error(`Chapter ${chapterId} not found`);
       return;
     }
-    
+
     if (chapter.hasAudio) {
       console.log(`Chapter ${chapterId} already has audio`);
       return;
@@ -279,7 +279,7 @@ export async function addChapterTTSJobAuto(chapterId: string) {
         console.error(`Chapter ${chapterId} has no text to clean`);
         return;
       }
-      
+
       console.log(`Chapter ${chapterId} text is not cleaned, cleaning first...`);
       cleanText = await cleanChapterText(chapterId, chapter.text);
     } else {
@@ -288,13 +288,13 @@ export async function addChapterTTSJobAuto(chapterId: string) {
 
     // Now proceed with TTS using the clean text
     const chunks = splitTextIntoParagraphs(cleanText);
-    
+
     // Create TTSChunk entries
     await prisma.tTSChunk.deleteMany({ where: { chapterId } });
     const chunkRecords = await Promise.all(chunks.map((text: string, idx: number) =>
       prisma.tTSChunk.create({ data: { chapterId, index: idx, text, status: 'pending' } })
     ));
-    
+
     // Process chunks concurrently with a limit of 10
     const MAX_CONCURRENT_CHUNKS = config.maxConcurrentChunks;
     const processChunk = async (chunk: any) => {
@@ -309,104 +309,106 @@ export async function addChapterTTSJobAuto(chapterId: string) {
       console.log(`Processing batch ${Math.floor(i / MAX_CONCURRENT_CHUNKS) + 1} with ${batch.length} chunks`);
       await Promise.all(batch.map(processChunk));
     }
-  // Wait for all chunks to complete (they should already be done due to Promise.all)
-  let allDone = false;
-  let attempts = 0;
-  const maxAttempts = 120; // 2 minutes timeout
-  
-  while (!allDone && attempts < maxAttempts) {
-    const statuses = await prisma.tTSChunk.findMany({ 
-      where: { chapterId }, 
-      select: { status: true } 
-    });
-    
-    const completed = statuses.filter(s => s.status === 'completed').length;
-    const failed = statuses.filter(s => s.status === 'failed').length;
-    const total = statuses.length;
-    
-    console.log(`Chapter ${chapterId}: ${completed}/${total} chunks completed, ${failed} failed`);
-    
-    allDone = statuses.every((s: { status: string }) => 
-      s.status === 'completed' || s.status === 'failed'
-    );
-    
-    if (!allDone) {
-      await new Promise(r => setTimeout(r, config.chunkBatchTimeoutMs));
-      attempts++;
-    }
-  }
-  
-  if (attempts >= maxAttempts) {
-    throw new Error(`Timeout waiting for TTS chunks to complete for chapter ${chapterId}`);
-  }
+    // Wait for all chunks to complete (they should already be done due to Promise.all)
+    let allDone = false;
+    let attempts = 0;
+    const maxAttempts = 120; // 2 minutes timeout
 
-  try {
-    // Combine audio files and convert to MP3
-    const chunks = await prisma.tTSChunk.findMany({ 
-      where: { chapterId, status: 'completed' }, 
-      orderBy: { index: 'asc' } 
-    });
-    
-    // Filter out any chunks without audio files
-    const files = chunks
-      .filter(c => c.audioFile)
-      .map(c => path.join('public/uploads', c.audioFile!));
-    
-    if (files.length === 0) {
-      throw new Error(`No completed audio files found for chapter ${chapterId}`);
-    }    console.log(`Combining ${files.length} audio files for chapter ${chapterId}`);
-    console.log(`Audio files to combine:`, files);
-    
-    const outputFile = `public/uploads/${chapterId}.mp3`;
-      try {
-      // Use the fast, simple audio processing with a much shorter timeout
-      console.log(`Processing audio files using fast, simple approach`);
-      const audioPromise = processAudioFilesFast(files, outputFile);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Audio processing timed out after 30 seconds')), config.ttsTimeoutMs)
+    while (!allDone && attempts < maxAttempts) {
+      const statuses = await prisma.tTSChunk.findMany({
+        where: { chapterId },
+        select: { status: true }
+      });
+
+      const completed = statuses.filter(s => s.status === 'completed').length;
+      const failed = statuses.filter(s => s.status === 'failed').length;
+      const total = statuses.length;
+
+      console.log(`Chapter ${chapterId}: ${completed}/${total} chunks completed, ${failed} failed`);
+
+      allDone = statuses.every((s: { status: string }) =>
+        s.status === 'completed' || s.status === 'failed'
       );
-      
-      await Promise.race([audioPromise, timeoutPromise]);
-      console.log(`Fast audio processing completed successfully`);} catch (audioError) {
-      console.error(`Audio processing error for chapter ${chapterId}:`, audioError);
-      // Try to clean up any partial files
-      try {
-        const fs = await import('fs/promises');
-        await fs.unlink(outputFile);
-        console.log(`Cleaned up partial output file after error`);      } catch (cleanupError) {
-        const errorMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
-        console.log(`Output file cleanup failed (file may not exist):`, errorMessage);
+
+      if (!allDone) {
+        await new Promise(r => setTimeout(r, config.chunkBatchTimeoutMs));
+        attempts++;
       }
-      throw audioError;
     }
+
+    if (attempts >= maxAttempts) {
+      throw new Error(`Timeout waiting for TTS chunks to complete for chapter ${chapterId}`);
+    }
+
+    try {
+      // Combine audio files and convert to MP3
+      const chunks = await prisma.tTSChunk.findMany({
+        where: { chapterId, status: 'completed' },
+        orderBy: { index: 'asc' }
+      });
+
+      // Filter out any chunks without audio files
+      const files = chunks
+        .filter(c => c.audioFile)
+        .map(c => path.join('public/uploads', c.audioFile!));
+
+      if (files.length === 0) {
+        throw new Error(`No completed audio files found for chapter ${chapterId}`);
+      } console.log(`Combining ${files.length} audio files for chapter ${chapterId}`);
+      console.log(`Audio files to combine:`, files);
+
+      const outputFile = `public/uploads/${chapterId}.mp3`;
+      try {
+        // Use the fast, simple audio processing with a much shorter timeout
+        console.log(`Processing audio files using fast, simple approach`);
+        const audioPromise = processAudioFilesFast(files, outputFile);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Audio processing timed out after 30 seconds')), config.ttsTimeoutMs)
+        );
+
+        await Promise.race([audioPromise, timeoutPromise]);
+        console.log(`Fast audio processing completed successfully`);
+      } catch (audioError) {
+        console.error(`Audio processing error for chapter ${chapterId}:`, audioError);
+        // Try to clean up any partial files
+        try {
+          const fs = await import('fs/promises');
+          await fs.unlink(outputFile);
+          console.log(`Cleaned up partial output file after error`);
+        } catch (cleanupError) {
+          const errorMessage = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+          console.log(`Output file cleanup failed (file may not exist):`, errorMessage);
+        }
+        throw audioError;
+      }
       // Update chapter status to indicate audio is ready
-    const updateResult = await prisma.chapter.update({ 
-      where: { id: chapterId }, 
-      data: { audioFile: `${chapterId}.mp3`, hasAudio: true } 
-    });
+      const updateResult = await prisma.chapter.update({
+        where: { id: chapterId },
+        data: { audioFile: `${chapterId}.mp3`, hasAudio: true }
+      });
       console.log(`Successfully updated chapter ${chapterId} status:`, {
-      audioFile: updateResult.audioFile,
-      hasAudio: updateResult.hasAudio
-    });
-    
-    // Verify the update was successful
-    const verifyChapter = await prisma.chapter.findUnique({
-      where: { id: chapterId },
-      select: { hasAudio: true, audioFile: true }
-    });
-    
-    if (verifyChapter?.hasAudio) {
-      console.log(`✅ Chapter ${chapterId} successfully marked as having audio`);
-    } else {
-      console.error(`❌ Chapter ${chapterId} was NOT properly updated - hasAudio is still false!`);
+        audioFile: updateResult.audioFile,
+        hasAudio: updateResult.hasAudio
+      });
+
+      // Verify the update was successful
+      const verifyChapter = await prisma.chapter.findUnique({
+        where: { id: chapterId },
+        select: { hasAudio: true, audioFile: true }
+      });
+
+      if (verifyChapter?.hasAudio) {
+        console.log(`✅ Chapter ${chapterId} successfully marked as having audio`);
+      } else {
+        console.error(`❌ Chapter ${chapterId} was NOT properly updated - hasAudio is still false!`);
+      }
+
+      console.log(`Successfully completed TTS processing for chapter ${chapterId}`);
+    } catch (error) {
+      console.error(`Error combining audio files for chapter ${chapterId}:`, error);
+      // Don't update hasAudio if there was an error
+      throw error;
     }
-    
-    console.log(`Successfully completed TTS processing for chapter ${chapterId}`);
-  } catch (error) {
-    console.error(`Error combining audio files for chapter ${chapterId}:`, error);
-    // Don't update hasAudio if there was an error
-    throw error;
-  }
   } catch (error) {
     console.error(`Error in TTS job for chapter ${chapterId}:`, error);
     // Optionally mark chapter as failed or log for retry
@@ -440,13 +442,13 @@ async function saveWaveFile(
 async function processTTSChunk(chunkId: string) {
   const chunk = await prisma.tTSChunk.findUnique({ where: { id: chunkId } });
   if (!chunk || chunk.status === 'completed') return;
-  
+
   // Mark as processing
-  await prisma.tTSChunk.update({ 
-    where: { id: chunkId }, 
-    data: { status: 'processing' } 
+  await prisma.tTSChunk.update({
+    where: { id: chunkId },
+    data: { status: 'processing' }
   });
-  
+
   // Ensure this only runs on server side
   if (typeof window !== 'undefined') {
     throw new Error('processTTSChunk can only be used on the server side');
@@ -454,14 +456,19 @@ async function processTTSChunk(chunkId: string) {
 
   try {
     console.log(`Processing TTS for chunk ${chunkId} with text: ${chunk.text.substring(0, 100)}...`);
-    
+
     // Use Gemini API for TTS
     const { GoogleGenAI } = await import('@google/genai');
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
     const response = await ai.models.generateContent({
       model: config.geminiTTSModel,
-      contents: [{ parts: [{ text: chunk.text }] }],
+      contents: [{
+        parts: [{
+          text: 'You are narrating an audio book. Read The Following Text in the appropriate tune:\n'
+            + chunk.text
+        }]
+      }],
       config: {
         responseModalities: ['AUDIO'],
         speechConfig: {
@@ -483,17 +490,17 @@ async function processTTSChunk(chunkId: string) {
 
     // Save as WAV file
     await saveWaveFile(outputPath, audioBuffer);
-    
+
     console.log(`Successfully generated TTS for chunk ${chunkId}`);
-    await prisma.tTSChunk.update({ 
-      where: { id: chunkId }, 
-      data: { audioFile, status: 'completed' } 
+    await prisma.tTSChunk.update({
+      where: { id: chunkId },
+      data: { audioFile, status: 'completed' }
     });
   } catch (e) {
     console.error(`Error processing TTS for chunk ${chunkId}:`, e);
-    await prisma.tTSChunk.update({ 
-      where: { id: chunkId }, 
-      data: { status: 'failed', error: String(e) } 
+    await prisma.tTSChunk.update({
+      where: { id: chunkId },
+      data: { status: 'failed', error: String(e) }
     });
     throw e; // Re-throw so the calling function knows this chunk failed
   }
@@ -517,7 +524,7 @@ class TTSQueue {
       console.log(`TTS job for chapter ${job.chapterId} already exists, skipping`);
       return;
     }
-    
+
     console.log(`Adding TTS job to queue for chapter ${job.chapterId}`);
     this.jobs.push(job);
     console.log(`TTS queue length: ${this.jobs.length}`);
@@ -530,7 +537,7 @@ class TTSQueue {
       const job = this.jobs.shift();
       if (job && !this.processing.has(job.chapterId)) {
         this.processing.add(job.chapterId);
-        
+
         // Process job without awaiting (concurrent execution)
         this.processJob(job).finally(() => {
           this.processing.delete(job.chapterId);
@@ -577,10 +584,10 @@ export function getTTSQueueStatus() {
 // Batch process multiple chapters for TTS
 export async function batchProcessTTS(chapterIds: string[]) {
   console.log(`Starting batch TTS processing for ${chapterIds.length} chapters with concurrent processing enabled`);
-  
+
   for (const chapterId of chapterIds) {
     addTTSJob(chapterId);
   }
-  
+
   console.log(`Added ${chapterIds.length} chapters to TTS queue`);
 }

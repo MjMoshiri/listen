@@ -20,7 +20,9 @@ export async function POST(request: NextRequest) {
     }
     if (!chapters.every(ch => ch.hasAudio && ch.audioFile)) {
       return NextResponse.json({ error: 'Not all chapters have audio' }, { status: 400 });
-    }    if (chapters.length === 1) {
+    }
+    
+    if (chapters.length === 1) {
       // Single file: return audio file directly
       const chapter = chapters[0];
       const filePath = path.join(process.cwd(), 'public', 'uploads', chapter.audioFile!);
@@ -49,7 +51,9 @@ export async function POST(request: NextRequest) {
           downloadExtension = '.mp3';
       }
       
-      const fileName = `${chapter.book.title.replace(/\s+/g, '_')}_${chapter.id}${downloadExtension}`;
+      // Format: 47: The_Social_Animal-Worth_Publishers_(2018).mp3
+      const baseName = `${chapter.book.title.replace(/\s+/g, '_')}`;
+      const fileName = `${chapter.number}: ${baseName}${downloadExtension}`;
       return new NextResponse(fileBuffer, {
         status: 200,
         headers: {
@@ -57,23 +61,30 @@ export async function POST(request: NextRequest) {
           'Content-Disposition': `attachment; filename="${fileName}"`,
         },
       });
-    } else {      // Multiple files: zip and return
+    } else {     
       const zip = new JSZip();
       for (const chapter of chapters) {
         const filePath = path.join(process.cwd(), 'public', 'uploads', chapter.audioFile!);
         const fileBuffer = await fs.readFile(filePath);
         
-        // Use the actual file extension from the stored audioFile
-        const originalExtension = path.extname(chapter.audioFile!) || '.mp3';
-        const fileName = `${chapter.book.title.replace(/\s+/g, '_')}_${chapter.id}${originalExtension}`;
+        const fileExtension = path.extname(chapter.audioFile!).toLowerCase() || '.mp3';
+        const baseName = `${chapter.book.title.replace(/\s+/g, '_')}`;
+        const fileName = `${chapter.number}: ${baseName}${fileExtension}`;
         zip.file(fileName, fileBuffer);
       }
+      
+      const chapterNumbers = chapters.map(ch => ch.number).sort((a, b) => a - b);
+      const minChapter = chapterNumbers[0];
+      const maxChapter = chapterNumbers[chapterNumbers.length - 1];
+      const bookName = chapters[0].book.title.replace(/\s+/g, '_');
+      const zipFileName = `${bookName} (${minChapter} - ${maxChapter}).zip`;
+      
       const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
       return new NextResponse(zipBuffer, {
         status: 200,
         headers: {
           'Content-Type': 'application/zip',
-          'Content-Disposition': 'attachment; filename="audio_files.zip"',
+          'Content-Disposition': `attachment; filename="${zipFileName}"`,
         },
       });
     }
