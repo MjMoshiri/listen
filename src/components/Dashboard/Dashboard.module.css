@@ -1,0 +1,13 @@
+:root {
+  --bg: #181a20;
+  --fg: #f3f3f3;
+  --accent: #4f8cff;
+}
+
+.dashboard {
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  padding: 2rem;
+  font-family: 'Inter', sans-serif;
+}

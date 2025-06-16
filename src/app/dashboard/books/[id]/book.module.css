@@ -1,0 +1,72 @@
+.container {
+  padding: 32px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+}
+
+.backLink {
+  display: inline-block;
+  margin-bottom: 1.5rem;
+  color: #0070f3;
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+.chaptersList {
+  list-style: none;
+  padding: 0;
+}
+
+.chapterItem {
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chapterTitle {
+  font-weight: 500;
+}
+
+.bookPage {
+  margin-top: 2rem;
+  background: #23262f;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 16px #0002;
+}
+
+h1, h2 {
+  color: #f3f3f3;
+}
+
+button {
+  background: var(--accent, #4f8cff);
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  margin-right: 1rem;
+}
+button:disabled {
+  background: #888;
+  cursor: not-allowed;
+}
+a {
+  color: #4f8cff;
+  text-decoration: underline;
+}

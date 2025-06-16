@@ -1,0 +1,521 @@
+.chapterList {
+  margin-top: 2rem;
+  padding-bottom: 2rem;
+}
+
+.group {
+  margin-bottom: 3rem;
+}
+
+.groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #1a1d26 0%, #23262f 100%);
+  border-radius: 8px;
+  border: 1px solid rgba(79, 140, 255, 0.2);
+}
+
+.groupTitle {
+  color: #4f8cff;
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.groupTitle:hover {
+  color: #6fa8ff;
+}
+
+.collapseIcon {
+  margin-right: 0.5rem;
+  font-size: 0.9rem;
+  transition: transform 0.2s ease;
+}
+
+.groupActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.chapterItem {
+  background: linear-gradient(135deg, #23262f 0%, #2d3140 100%);
+  margin-bottom: 1rem;
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(79, 140, 255, 0.1);
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.chapterItem:hover {
+  border-color: rgba(79, 140, 255, 0.3);
+  box-shadow: 0 4px 16px rgba(79, 140, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.chapterHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.checkbox {
+  accent-color: #4f8cff;
+  width: 1.2rem;
+  height: 1.2rem;
+  cursor: pointer;
+}
+
+.title {
+  font-weight: 600;
+  flex: 1;
+  color: #eaf1fb;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
+.statusIndicators {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.cleared,
+.notCleared,
+.audio,
+.noAudio {
+  padding: 0.25rem 0.75rem;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.cleared {
+  background: rgba(79, 255, 140, 0.15);
+  color: #4fff8c;
+  border: 1px solid rgba(79, 255, 140, 0.3);
+}
+
+.notCleared {
+  background: rgba(255, 79, 79, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 79, 79, 0.3);
+}
+
+.audio {
+  background: rgba(79, 140, 255, 0.15);
+  color: #4f8cff;
+  border: 1px solid rgba(79, 140, 255, 0.3);
+}
+
+.noAudio {
+  background: rgba(136, 136, 136, 0.15);
+  color: #888;
+  border: 1px solid rgba(136, 136, 136, 0.3);
+}
+.actionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.actionButtons button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.editBtn {
+  background: linear-gradient(135deg, #6c5ce7 0%, #a29bfe 100%);
+  color: white;
+}
+
+.editBtn:hover {
+  background: linear-gradient(135deg, #a29bfe 0%, #6c5ce7 100%);
+  transform: translateY(-1px);
+}
+
+.readBtn {
+  background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+  color: white;
+}
+
+.readBtn:hover {
+  background: linear-gradient(135deg, #00cec9 0%, #00b894 100%);
+  transform: translateY(-1px);
+}
+
+.unreadBtn {
+  background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+  color: white;
+}
+
+.unreadBtn:hover {
+  background: linear-gradient(135deg, #f39c12 0%, #fdcb6e 100%);
+  transform: translateY(-1px);
+}
+
+.archiveBtn {
+  background: linear-gradient(135deg, #636e72 0%, #b2bec3 100%);
+  color: white;
+}
+
+.archiveBtn:hover {
+  background: linear-gradient(135deg, #b2bec3 0%, #636e72 100%);
+  transform: translateY(-1px);
+}
+
+.unarchiveBtn {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+  color: white;
+}
+
+.unarchiveBtn:hover {
+  background: linear-gradient(135deg, #0984e3 0%, #74b9ff 100%);
+  transform: translateY(-1px);
+}
+
+.clearBtn {
+  background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+  color: white;
+}
+
+.clearBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d63031 0%, #e17055 100%);
+  transform: translateY(-1px);
+}
+
+.clearBtn:disabled {
+  background: #2d3748;
+  color: #4a5568;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.audioBtn {
+  background: linear-gradient(135deg, #4f8cff 0%, #6fa8ff 100%);
+  color: white;
+}
+
+.audioBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #6fa8ff 0%, #4f8cff 100%);
+  transform: translateY(-1px);
+}
+
+.audioBtn:disabled {
+  background: #2d3748;
+  color: #4a5568;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.downloadBtn {
+  background: linear-gradient(135deg, #55a3ff 0%, #003d82 100%);
+  color: white;
+}
+
+.downloadBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #003d82 0%, #55a3ff 100%);
+  transform: translateY(-1px);
+}
+
+.downloadBtn:disabled {
+  background: #2d3748;
+  color: #4a5568;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.textCollapse {
+  margin-top: 0.5rem;
+}
+
+.summary {
+  color: #4f8cff;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 0.5rem 0;
+  user-select: none;
+}
+
+.summary:hover {
+  color: #6fa8ff;
+}
+
+.text {
+  margin-top: 1rem;
+  background: rgba(24, 26, 32, 0.6);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid rgba(79, 140, 255, 0.1);
+}
+
+.clearedText,
+.originalText,
+.unclearedText {
+  color: #e2e8f0;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+}
+
+.unclearedText {
+  background: rgba(255, 180, 71, 0.1);
+  padding: 1rem;
+  border-radius: 6px;
+  border-left: 3px solid #ffb347;
+}
+
+.originalText {
+  background: rgba(136, 136, 136, 0.1);
+  padding: 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+
+.batchActions {
+  position: sticky;
+  bottom: 2rem;
+  background: linear-gradient(135deg, #23262f 0%, #2d3140 100%);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(79, 140, 255, 0.2);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.batchTitle {
+  color: #4f8cff;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.batchButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.batchButtons button {
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.batchReadBtn {
+  background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+  color: white;
+}
+
+.batchArchiveBtn {
+  background: linear-gradient(135deg, #636e72 0%, #b2bec3 100%);
+  color: white;
+}
+
+.batchClearBtn {
+  background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+  color: white;
+}
+
+.batchAudioBtn {
+  background: linear-gradient(135deg, #4f8cff 0%, #6fa8ff 100%);
+  color: white;
+}
+
+.batchRegenerateBtn {
+  background: linear-gradient(135deg, #ff8f4f 0%, #ff6f6f 100%);
+  color: white;
+}
+
+.batchDownloadBtn {
+  background: linear-gradient(135deg, #55a3ff 0%, #003d82 100%);
+  color: white;
+}
+
+.batchUnreadBtn {
+  background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+  color: white;
+}
+
+.batchUnarchiveBtn {
+  background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+  color: white;
+}
+
+.batchButtons button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.selectedCount {
+  color: #4f8cff;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.groupContent {
+  margin-left: 0;
+}
+
+.regenerateBtn {
+  background: linear-gradient(135deg, #ff8f4f 0%, #ff6f6f 100%);
+  color: white;
+}
+
+.regenerateBtn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff6f6f 0%, #ff8f4f 100%);
+  transform: translateY(-1px);
+}
+
+/* TTS Progress Display */
+.ttsProgress {
+  background: linear-gradient(135deg, #1a1d26 0%, #23262f 100%);
+  border: 1px solid rgba(79, 140, 255, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 4px 16px rgba(79, 140, 255, 0.1);
+}
+
+.ttsProgress h3 {
+  color: #4f8cff;
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin: 0 0 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ttsProgress h3::before {
+  content: "🎙️";
+  font-size: 1.1rem;
+}
+
+.progressBar {
+  background: rgba(24, 26, 32, 0.8);
+  border-radius: 8px;
+  height: 12px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  border: 1px solid rgba(79, 140, 255, 0.2);
+}
+
+.progressFill {
+  background: linear-gradient(90deg, #4f8cff 0%, #6fa8ff 50%, #4f8cff 100%);
+  height: 100%;
+  border-radius: 7px;
+  transition: width 0.3s ease;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.progressStats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.progressStats span {
+  color: #b3c4d9;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  background: rgba(79, 140, 255, 0.1);
+  border: 1px solid rgba(79, 140, 255, 0.2);
+  white-space: nowrap;
+}
+
+.progressStats span:first-child {
+  color: #6fa8ff;
+  background: rgba(79, 140, 255, 0.15);
+  border-color: rgba(79, 140, 255, 0.3);
+}
+
+/* TTS Status Indicators */
+.ttsStatus {
+  padding: 0.25rem 0.75rem;
+  border-radius: 16px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: all 0.2s ease;
+}
+
+.ttsStatus[data-status="pending"] {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.ttsStatus[data-status="processing"] {
+  background: rgba(79, 140, 255, 0.15);
+  color: #4f8cff;
+  border: 1px solid rgba(79, 140, 255, 0.3);
+  animation: pulse 2s infinite;
+}
+
+.ttsStatus[data-status="completed"] {
+  background: rgba(79, 255, 140, 0.15);
+  color: #4fff8c;
+  border: 1px solid rgba(79, 255, 140, 0.3);
+}
+
+.ttsStatus[data-status="failed"] {
+  background: rgba(255, 79, 79, 0.15);
+  color: #ff6b6b;
+  border: 1px solid rgba(255, 79, 79, 0.3);
+  cursor: help;
+}
+
+.ttsStatus[data-status="failed"]:hover {
+  background: rgba(255, 79, 79, 0.25);
+  border-color: rgba(255, 79, 79, 0.5);
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 1;
+  }
+}

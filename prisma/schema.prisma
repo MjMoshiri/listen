@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Book {
+  id       String    @id @default(cuid())
+  title    String
+  chapters Chapter[]
+
+  @@map("books")
+}
+
+model Chapter {
+  id         String  @id @default(cuid())
+  bookId     String
+  text       String?
+  audioText  String? @map("audio_text")
+  label      String?
+  audioFile  String? @map("audio_file")
+  number     Int
+  isRead     Boolean @default(false) @map("is_read")
+  isArchived Boolean @default(false) @map("is_archived")
+  hasCleaned Boolean @default(false) @map("has_cleaned")
+  hasAudio   Boolean @default(false) @map("has_audio")
+  book       Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  ttsChunks  TTSChunk[] @relation("ChapterTTSChunks")
+
+  @@map("chapters")
+}
+
+model TTSChunk {
+  id         String   @id @default(cuid())
+  chapterId  String
+  index      Int      // Order of the chunk in the chapter
+  text       String   // The chunk text
+  audioFile  String?  // Path to the generated audio file
+  status     String   // 'pending', 'processing', 'completed', 'failed'
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  chapter    Chapter  @relation("ChapterTTSChunks", fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([chapterId, index])
+  @@map("tts_chunks")
+}

@@ -1,0 +1,2 @@
+fluent-ffmpeg
+@ffmpeg-installer/ffmpeg

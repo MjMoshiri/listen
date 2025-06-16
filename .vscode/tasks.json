@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Prisma Migrate: Add TTS Chunks",
+			"command": "npx prisma migrate dev --name add_tts_chunks"
+		}
+	]
+}

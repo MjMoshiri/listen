@@ -1,0 +1,106 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: linear-gradient(135deg, #23262f 0%, #2d3140 100%);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  width: 90%;
+  max-width: 450px;
+  border: 1px solid rgba(79, 140, 255, 0.2);
+  overflow: hidden;
+}
+
+.header {
+  padding: 1.5rem 2rem 1rem;
+  border-bottom: 1px solid rgba(79, 140, 255, 0.2);
+}
+
+.title {
+  margin: 0;
+  color: #eaf1fb;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.content {
+  padding: 1.5rem 2rem;
+}
+
+.message {
+  margin: 0;
+  color: #b3c7f9;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.actions {
+  padding: 1rem 2rem 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+}
+
+.cancelButton,
+.confirmButton {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancelButton {
+  background: rgba(136, 136, 136, 0.2);
+  color: #888;
+  border: 1px solid rgba(136, 136, 136, 0.3);
+}
+
+.cancelButton:hover {
+  background: rgba(136, 136, 136, 0.3);
+  color: #aaa;
+}
+
+.confirmButton {
+  color: white;
+}
+
+.confirmButton.info {
+  background: linear-gradient(135deg, #4f8cff 0%, #6fa8ff 100%);
+}
+
+.confirmButton.info:hover {
+  background: linear-gradient(135deg, #6fa8ff 0%, #4f8cff 100%);
+  transform: translateY(-1px);
+}
+
+.confirmButton.warning {
+  background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+}
+
+.confirmButton.warning:hover {
+  background: linear-gradient(135deg, #f39c12 0%, #fdcb6e 100%);
+  transform: translateY(-1px);
+}
+
+.confirmButton.danger {
+  background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+}
+
+.confirmButton.danger:hover {
+  background: linear-gradient(135deg, #d63031 0%, #e17055 100%);
+  transform: translateY(-1px);
+}
