@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Listen - Book to Audio Converter
+
+A Next.js application that converts books into audio format using Text-to-Speech technology and LLM processing. The application processes books chapter by chapter, breaking them into manageable chunks for TTS conversion, with AI-powered text optimization.
+
+## Features
+
+- Book upload and processing
+- Chapter-by-chapter audio conversion
+- LLM-powered text optimization using Google's Generative AI
+- Progress tracking for each chapter
+- Chunked TTS processing for better performance
+- Audio file management
+
+## Tech Stack
+
+- [Next.js 15](https://nextjs.org) with TurboPack
+- [Prisma](https://prisma.io) with SQLite database
+- [Google's Generative AI](https://ai.google.dev/) for text processing
+- EPUB parsing using epub2
+- Audio processing with fluent-ffmpeg
+- React 19
 
 ## Getting Started
 
-First, run the development server:
-
+1. Install dependencies:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+2. Set up the database:
+```bash
+npm run db:generate  # Generate Prisma client
+npm run db:migrate  # Run database migrations
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+3. Start the development server:
+```bash
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open [http://localhost:3000](http://localhost:3000) to use the application.
 
-## Learn More
+## Database Management
 
-To learn more about Next.js, take a look at the following resources:
+- `npm run db:studio` - Open Prisma Studio to manage database
+- `npm run db:push` - Push schema changes to database
+- `npm run db:migrate` - Create and apply new migrations
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `src/app` - Next.js application routes and pages
+- `prisma/` - Database schema and migrations
+- `public/uploads/` - Processed audio files and uploaded books
