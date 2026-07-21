@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Dashboard from '@/components/Dashboard/Dashboard';
 import BookList from '@/components/BookList/BookList';
+import SelfhostToggle from '@/components/SelfhostToggle/SelfhostToggle';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import uploadButtonStyles from './uploadButton.module.css';
@@ -53,6 +54,7 @@ export default function DashboardPage() {
   return (
     <Dashboard>
       <h1>Dashboard</h1>
+      <SelfhostToggle />
       <Link href="/dashboard/upload">
         <button className={uploadButtonStyles.uploadButton}>
           Upload New Book

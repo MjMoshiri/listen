@@ -1,0 +1,44 @@
+.container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1rem;
+  flex-wrap: wrap;
+}
+
+.label {
+  font-size: 0.95rem;
+}
+
+.selfhost {
+  color: #16a34a;
+}
+
+.gemini {
+  color: #2563eb;
+}
+
+.button {
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  border: none;
+  background: #16a34a;
+  color: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.buttonSecondary {
+  composes: button;
+  background: #6b7280;
+}
+
+.error {
+  color: #dc2626;
+  font-size: 0.85rem;
+}

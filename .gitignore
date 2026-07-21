@@ -51,3 +51,10 @@ next-env.d.ts
 
 /public/uploads
 prisma/dev.db
+
+# runtime settings (selfhost endpoint URLs etc.)
+/data/
+
+# saved book pages kept locally for development (copyrighted)
+/*.html
+/*_files/

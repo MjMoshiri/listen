@@ -8,9 +8,12 @@
 import { processEpubFile } from './epub-processor';
 import { prisma } from './prisma';
 import path from 'path';
+import fs from 'fs/promises';
 import { splitTextIntoParagraphs } from './text-chunker';
 import { processAudioFilesFast } from './audio-simple';
 import { config } from './config';
+import { cleanTextForSpeech } from './providers/llm';
+import { synthesizeChunk } from './providers/tts';
 
 // ─── Semaphore ───────────────────────────────────────────────────────────────
 
@@ -106,15 +109,7 @@ const cleaningSemaphore = new Semaphore(config.maxConcurrentChapters);
 async function cleanChapterText(chapterId: string, text: string): Promise<string> {
   console.log(`Cleaning text for chapter ${chapterId}`);
   try {
-    const { GoogleGenAI } = await import('@google/genai');
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const prompt = `Keep the full text exactly the same word for word, but take out anything that makes it hard to read out loud in front of people. This includes things like footnote numbers, citation marks, or extra symbols that don't help when speaking. Don't change the words or shorten the text—just clean it up for smooth reading.`;
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: [{ parts: [{ text: `${prompt}\n\n${text}` }] }],
-      config: { maxOutputTokens: config.maxOutputTokens, temperature: config.temperature },
-    });
-    const cleaned = response.text || response.candidates?.[0]?.content?.parts?.[0]?.text || text;
+    const cleaned = await cleanTextForSpeech(text);
     await prisma.chapter.update({
       where: { id: chapterId },
       data: { audioText: cleaned, hasCleaned: true },
@@ -143,29 +138,6 @@ export function addChapterCleaningJob(chapterId: string, text: string) {
   })();
 }
 
-// ─── WAV helper ──────────────────────────────────────────────────────────────
-
-async function saveWaveFile(
-  filename: string,
-  pcmData: Buffer,
-  channels = 1,
-  rate = 24000,
-  sampleWidth = 2,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const wav = require('wav');
-    const writer = new wav.FileWriter(filename, {
-      channels,
-      sampleRate: rate,
-      bitDepth: sampleWidth * 8,
-    });
-    writer.on('finish', resolve);
-    writer.on('error', reject);
-    writer.write(pcmData);
-    writer.end();
-  });
-}
-
 // ─── TTS chunk processing ────────────────────────────────────────────────────
 
 const MAX_RETRIES = 3;
@@ -181,32 +153,9 @@ async function processTTSChunk(chunkId: string, retryCount = 0): Promise<void> {
   });
 
   try {
-    const { GoogleGenAI } = await import('@google/genai');
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-
-    const response = await ai.models.generateContent({
-      model: config.geminiTTSModel,
-      contents: [{
-        parts: [{
-          text: 'You are narrating an audio book. Read The Following Text in the appropriate tune:\n' + chunk.text,
-        }],
-      }],
-      config: {
-        responseModalities: ['AUDIO'],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: config.geminiVoiceName },
-          },
-        },
-      },
-    });
-
-    const data = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!data) throw new Error('No audio data received from Gemini API');
-
-    const audioBuffer = Buffer.from(data, 'base64');
+    const wavBuffer = await synthesizeChunk(chunk.text);
     const audioFile = `${chunk.id}.wav`;
-    await saveWaveFile(path.join('public/uploads', audioFile), audioBuffer);
+    await fs.writeFile(path.join('public/uploads', audioFile), wavBuffer);
 
     await prisma.tTSChunk.update({
       where: { id: chunkId },
@@ -250,12 +199,12 @@ async function combineChapterAudio(chapterId: string): Promise<void> {
   const files = chunks.filter(c => c.audioFile).map(c => path.join('public/uploads', c.audioFile!));
   if (files.length === 0) throw new Error(`No completed audio files for chapter ${chapterId}`);
 
-  const outputFile = `public/uploads/${chapterId}.ogg`;
+  const outputFile = `public/uploads/${chapterId}.mp3`;
   await processAudioFilesFast(files, outputFile);
 
   await prisma.chapter.update({
     where: { id: chapterId },
-    data: { audioFile: `${chapterId}.ogg`, hasAudio: true },
+    data: { audioFile: `${chapterId}.mp3`, hasAudio: true },
   });
   console.log(`Combined audio for chapter ${chapterId}`);
 }
@@ -318,10 +267,15 @@ export async function addChapterTTSJobAuto(chapterId: string) {
 
   const allCompleted = finalChunks.every(c => c.status === 'completed');
   if (allCompleted) {
-    await combineChapterAudio(chapterId);
+    try {
+      await combineChapterAudio(chapterId);
+    } catch (err) {
+      console.error(`Failed to combine chapter ${chapterId}:`, err);
+    }
   } else {
     const failed = finalChunks.filter(c => c.status === 'failed').length;
-    console.log(`Chapter ${chapterId}: ${failed} chunks failed, not combining`);
+    const pending = finalChunks.filter(c => c.status !== 'completed' && c.status !== 'failed').length;
+    console.log(`Chapter ${chapterId}: ${failed} failed, ${pending} unfinished, not combining`);
   }
 }
 
