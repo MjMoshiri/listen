@@ -137,7 +137,7 @@ export default function Reader({ initial }: { initial: PlayerData }) {
       if (!ws.length) continue;
       const start = offsets[i] ?? 0;
       const end = i + 1 < offsets.length ? offsets[i + 1] : audioDuration || start;
-      const ts = blockWordStarts(ws, start, Math.max(end - start, 0), blocks[i].chunks);
+      const ts = blockWordStarts(ws, start, Math.max(end - start, 0), blocks[i].chunks ?? []);
       for (let w = 0; w < ws.length; w++) {
         ws[w].dataset.wi = String(els.length);
         starts.push(ts[w]);
