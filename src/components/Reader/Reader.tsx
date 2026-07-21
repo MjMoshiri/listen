@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PlayerData } from '@/lib/player-data';
+import { blockWordStarts, wrapWords } from './word-sync';
 import styles from './Reader.module.css';
 
 const RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
@@ -38,6 +39,13 @@ export default function Reader({ initial }: { initial: PlayerData }) {
   const articleRef = useRef<HTMLElement>(null);
   const blockEls = useRef<HTMLElement[]>([]);
   const plainRefs = useRef<(HTMLDivElement | null)[]>([]);
+  // Word-level timeline: every word span in document order + its start time
+  const words = useRef<{ starts: number[]; els: HTMLElement[] }>({ starts: [], els: [] });
+  const wordAt = useRef(-1);
+  const followRef = useRef(follow);
+  const playingRef = useRef(playing);
+  followRef.current = follow;
+  playingRef.current = playing;
   const router = useRouter();
 
   const { chapter, book, blocks, prevId, nextId, chapters, sourceHtml } = data;
@@ -115,19 +123,85 @@ export default function Reader({ initial }: { initial: PlayerData }) {
     return () => el?.classList.remove('lb-active');
   }, [rich, active, sourceHtml]);
 
+  // Word timeline: wrap every block's words in spans and give each a start
+  // time interpolated from the block's chunk durations, so the exact word
+  // being spoken can be highlighted and followed.
+  useEffect(() => {
+    words.current.els[wordAt.current]?.classList.remove('w-live');
+    const starts: number[] = [];
+    const els: HTMLElement[] = [];
+    for (let i = 0; i < blocks.length; i++) {
+      const el = blockEl(i);
+      if (!el) continue;
+      const ws = rich ? wrapWords(el) : Array.from(el.querySelectorAll<HTMLElement>('[data-w]'));
+      if (!ws.length) continue;
+      const start = offsets[i] ?? 0;
+      const end = i + 1 < offsets.length ? offsets[i + 1] : audioDuration || start;
+      const ts = blockWordStarts(ws, start, Math.max(end - start, 0), blocks[i].chunks);
+      for (let w = 0; w < ws.length; w++) {
+        ws[w].dataset.wi = String(els.length);
+        starts.push(ts[w]);
+        els.push(ws[w]);
+      }
+    }
+    words.current = { starts, els };
+    wordAt.current = -1;
+  }, [rich, sourceHtml, blocks, offsets, audioDuration, blockEl]);
+
+  // Move the word highlight to whatever is being spoken at time t; with
+  // follow on, keep that word inside the middle band of the viewport
+  // (teleprompter-style continuous scrolling).
+  const syncWord = useCallback((t: number) => {
+    const { starts, els } = words.current;
+    if (!els.length) return;
+    let lo = 0;
+    let hi = starts.length - 1;
+    let idx = 0;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (starts[mid] <= t) { idx = mid; lo = mid + 1; } else hi = mid - 1;
+    }
+    if (idx === wordAt.current) return;
+    els[wordAt.current]?.classList.remove('w-live');
+    wordAt.current = idx;
+    const el = els[idx];
+    el.classList.add('w-live');
+    if (followRef.current && playingRef.current) {
+      const r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight * 0.18 || r.bottom > window.innerHeight * 0.72) {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
+    }
+  }, []);
+
+  // timeupdate only fires ~4×/s — too coarse for word tracking at 2× speed,
+  // so run a rAF loop while playing.
+  useEffect(() => {
+    if (!playing) return;
+    let raf = requestAnimationFrame(function tick() {
+      const a = audioRef.current;
+      if (a) syncWord(a.currentTime);
+      raf = requestAnimationFrame(tick);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [playing, syncWord]);
+
   const onTimeUpdate = () => {
     const a = audioRef.current;
     if (!a) return;
     setTime(a.currentTime);
     setActive(indexAt(a.currentTime));
+    syncWord(a.currentTime);
     localStorage.setItem(`listen-pos-${id}`, String(a.currentTime));
   };
 
-  // Keep the block being spoken in view
+  // Turning follow on jumps straight back to the word being spoken
   useEffect(() => {
-    if (!follow || active < 0 || !playing) return;
-    blockEl(active)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, [active, follow, playing, blockEl]);
+    if (!follow) return;
+    const el = words.current.els[wordAt.current] || (active >= 0 ? blockEl(active) : null);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [follow]);
 
   const onLoadedMetadata = () => {
     const a = audioRef.current;
@@ -167,8 +241,21 @@ export default function Reader({ initial }: { initial: PlayerData }) {
     a.play();
   }, [chapter.hasAudio, offsets]);
 
-  // Click anywhere in the injected chapter HTML: play from that block
+  // Click on a word: play from that exact word
+  const seekWord = useCallback((target: HTMLElement): boolean => {
+    const w = target.closest('[data-w]') as HTMLElement | null;
+    const i = w?.dataset.wi ? Number(w.dataset.wi) : -1;
+    const a = audioRef.current;
+    if (i < 0 || !a || !chapter.hasAudio) return false;
+    const at = words.current.starts[i] ?? 0;
+    a.currentTime = Math.max(0, Math.min(at + 0.01, a.duration || at));
+    a.play();
+    return true;
+  }, [chapter.hasAudio]);
+
+  // Click anywhere in the injected chapter HTML: play from that word or block
   const onArticleClick = (e: React.MouseEvent) => {
+    if (seekWord(e.target as HTMLElement)) return;
     const hit = (e.target as HTMLElement).closest('[data-lb]') as HTMLElement | null;
     if (hit && articleRef.current?.contains(hit)) playBlock(Number(hit.dataset.lb));
   };
@@ -318,9 +405,11 @@ export default function Reader({ initial }: { initial: PlayerData }) {
                 i === active ? styles.active : '',
                 chapter.hasAudio ? styles.clickable : '',
               ].join(' ')}
-              onClick={() => playBlock(i)}
+              onClick={e => { if (!seekWord(e.target as HTMLElement)) playBlock(i); }}
             >
-              {b.text}
+              {b.text.split(/(\s+)/).map((part, wi) =>
+                /^\s+$/.test(part) ? part : <span key={wi} data-w>{part}</span>,
+              )}
             </div>
           ))}
         </main>
@@ -358,7 +447,7 @@ export default function Reader({ initial }: { initial: PlayerData }) {
           <button
             className={[styles.followBtn, follow ? styles.followOn : ''].join(' ')}
             onClick={() => setFollow(f => !f)}
-            title="Auto-scroll to the block being spoken"
+            title="Auto-scroll to the word being spoken"
           >
             follow
           </button>

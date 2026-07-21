@@ -349,6 +349,15 @@
   color: var(--fg-strong);
 }
 
+/* The exact word being spoken (box-shadow spread = padding without any
+   layout shift). Applies in both the rich and plain views. */
+.wrap :global(.w-live) {
+  background: var(--accent);
+  box-shadow: 0 0 0 2.5px var(--accent);
+  border-radius: 4px;
+  color: #fff;
+}
+
 /* ── Player bar ─────────────────────────────────────────────────────────── */
 
 .bar {

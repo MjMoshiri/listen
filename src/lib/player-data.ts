@@ -18,6 +18,9 @@ export interface PlayerBlock {
   text: string;
   duration: number | null;
   status: string;
+  /** Char length + audio duration of each TTS chunk inside this block —
+   *  timing anchors the reader uses to interpolate word-level sync. */
+  chunks: { chars: number; duration: number | null }[];
 }
 
 export interface ChapterNavItem {
@@ -78,6 +81,7 @@ function paragraphBlocks(paragraphs: string[], chunks: ChunkRow[]): PlayerBlock[
         ? group.reduce((s, c) => s + (c.duration || 0), 0)
         : null,
       status: group.every(c => c.status === 'completed') ? 'completed' : 'pending',
+      chunks: group.map(c => ({ chars: c.text.length, duration: c.duration })),
     });
   }
   return blocks;
@@ -114,15 +118,22 @@ export async function getPlayerData(chapterId: string): Promise<PlayerData | nul
     const paragraphs = splitParagraphs(chapter.audioText || chapter.text || '');
     blocks = chunks.length
       ? paragraphBlocks(paragraphs, chunks)
-      : paragraphs.map((text, index) => ({ index, text, duration: null, status: 'pending' }));
+      : paragraphs.map((text, index) => ({
+          index, text, duration: null, status: 'pending',
+          chunks: [{ chars: text.length, duration: null }],
+        }));
     if (!blocks) sourceHtml = null; // couldn't align — use the plain view
   }
 
   if (!blocks) {
     blocks = chunks.length
-      ? chunks.map(c => ({ index: c.index, text: c.text, duration: c.duration, status: c.status }))
+      ? chunks.map(c => ({
+          index: c.index, text: c.text, duration: c.duration, status: c.status,
+          chunks: [{ chars: c.text.length, duration: c.duration }],
+        }))
       : splitIntoSyncBlocks(chapter.audioText || chapter.text || '').map((text, index) => ({
           index, text, duration: null, status: 'pending',
+          chunks: [{ chars: text.length, duration: null }],
         }));
   }
 
