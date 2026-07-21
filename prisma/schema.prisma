@@ -19,6 +19,7 @@ model Chapter {
   id         String  @id @default(cuid())
   bookId     String
   text       String?
+  sourceHtml String? @map("source_html")
   audioText  String? @map("audio_text")
   label      String?
   audioFile  String? @map("audio_file")

@@ -17,10 +17,25 @@ export async function GET() {
   try {
     const books = await prisma.book.findMany({
       include: {
-        chapters: true,
+        chapters: {
+          select: { id: true, hasAudio: true, hasCleaned: true, isRead: true, isArchived: true },
+        },
       },
     });
-    return NextResponse.json(books);
+    // Summaries only — chapter text stays out of the library payload
+    return NextResponse.json(
+      books.map(b => {
+        const active = b.chapters.filter(c => !c.isArchived);
+        return {
+          id: b.id,
+          title: b.title,
+          chapterCount: active.length,
+          readyCount: active.filter(c => c.hasAudio).length,
+          readCount: active.filter(c => c.isRead).length,
+          workingCount: active.filter(c => !c.hasAudio && !c.hasCleaned).length,
+        };
+      }),
+    );
   } catch (error) {
     console.error('Error fetching books:', error);
     return NextResponse.json({ error: 'Failed to fetch books' }, { status: 500 });

@@ -43,8 +43,19 @@ class Semaphore {
   }
 }
 
+// Queue state lives on globalThis: in Next dev each API route bundles its own
+// module instance, so plain module-level maps/semaphores would fragment —
+// /api/generate's jobs would be invisible to /api/books/[id]/status (same
+// reason prisma.ts keeps its client on globalThis).
+const g = globalThis as unknown as {
+  __listenTtsSem?: Semaphore;
+  __listenCleanSem?: Semaphore;
+  __listenCleaningProgress?: Map<string, { done: number; total: number }>;
+  __listenActiveChapters?: Map<string, Promise<void>>;
+};
+
 // Single global semaphore for all TTS chunk processing
-const ttsSemaphore = new Semaphore(config.maxConcurrentChunks);
+const ttsSemaphore = (g.__listenTtsSem ??= new Semaphore(config.maxConcurrentChunks));
 
 // ─── Book Processing Queue (unchanged) ───────────────────────────────────────
 
@@ -106,12 +117,17 @@ export { jobQueue };
 // ─── Cleaning ────────────────────────────────────────────────────────────────
 
 // Concurrent cleaning with its own semaphore
-const cleaningSemaphore = new Semaphore(config.maxConcurrentChapters);
+const cleaningSemaphore = (g.__listenCleanSem ??= new Semaphore(config.maxConcurrentChapters));
+
+// Live cleaning progress per chapter (pieces done/total), for the dashboard.
+export const cleaningProgress = (g.__listenCleaningProgress ??= new Map());
 
 async function cleanChapterText(chapterId: string, text: string): Promise<string> {
   console.log(`Cleaning text for chapter ${chapterId}`);
   try {
-    const cleaned = await cleanTextForSpeech(text);
+    const cleaned = await cleanTextForSpeech(text, (done, total) =>
+      cleaningProgress.set(chapterId, { done, total }),
+    );
     await prisma.chapter.update({
       where: { id: chapterId },
       data: { audioText: cleaned, hasCleaned: true },
@@ -125,6 +141,8 @@ async function cleanChapterText(chapterId: string, text: string): Promise<string
       data: { audioText: text, hasCleaned: true },
     });
     return text;
+  } finally {
+    cleaningProgress.delete(chapterId);
   }
 }
 
@@ -296,7 +314,7 @@ export async function addChapterTTSJobAuto(chapterId: string) {
 // ─── Public API ──────────────────────────────────────────────────────────────
 
 // Track active chapter processing promises
-const activeChapters = new Map<string, Promise<void>>();
+const activeChapters = (g.__listenActiveChapters ??= new Map());
 
 export function addTTSJob(chapterId: string) {
   if (activeChapters.has(chapterId)) {

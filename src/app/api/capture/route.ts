@@ -1,14 +1,19 @@
 /**
  * Capture endpoint for the O'Reilly browser extension.
- * POST { bookTitle, chapters: [{ title?, number, html }] }
+ * POST { bookTitle, chapters: [{ title?, number, html, images? }] }
  * Upserts the book by title, extracts spoken text from each chapter's HTML,
- * and creates Chapter rows (same shape as the EPUB path). CORS is open since
- * the extension calls localhost from a learning.oreilly.com page context.
+ * saves the chapter's images locally, and stores sanitized display HTML for
+ * the read-along player. Re-capturing an existing chapter refreshes its
+ * presentation (HTML + images) without touching its audio pipeline. CORS is
+ * open since the extension calls localhost from a learning.oreilly.com page.
  */
 
 import { NextResponse } from 'next/server';
+import { createHash } from 'crypto';
+import path from 'path';
+import fs from 'fs/promises';
 import { prisma } from '@/lib/prisma';
-import { extractChapterText } from '@/lib/oreilly-html';
+import { extractChapter } from '@/lib/oreilly-html';
 import { addTTSJob } from '@/lib/job-queue';
 
 const CORS = {
@@ -21,10 +26,53 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS });
 }
 
+interface CaptureImage {
+  data: string; // base64, no data: prefix
+  type: string; // mime type
+}
+
 interface CaptureChapter {
   title?: string;
   number: number;
   html: string;
+  images?: Record<string, CaptureImage>;
+}
+
+const EXT_BY_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg',
+  'image/avif': 'avif',
+};
+
+/** Write chapter images to public/uploads/images (content-addressed) and
+ *  return a map from the original src attribute to the local URL. */
+async function saveImages(images: Record<string, CaptureImage>): Promise<Record<string, string>> {
+  const dir = path.join(process.cwd(), 'public', 'uploads', 'images');
+  await fs.mkdir(dir, { recursive: true });
+
+  const srcMap: Record<string, string> = {};
+  for (const [src, img] of Object.entries(images)) {
+    const ext = EXT_BY_MIME[img.type];
+    if (!ext || !img.data) continue;
+    try {
+      const buf = Buffer.from(img.data, 'base64');
+      if (buf.length === 0 || buf.length > 20_000_000) continue;
+      const name = `${createHash('sha1').update(buf).digest('hex')}.${ext}`;
+      const file = path.join(dir, name);
+      try {
+        await fs.access(file);
+      } catch {
+        await fs.writeFile(file, buf);
+      }
+      srcMap[src] = `/uploads/images/${name}`;
+    } catch {
+      // Bad base64 or unwritable file — skip this image, keep the rest.
+    }
+  }
+  return srcMap;
 }
 
 export async function POST(request: Request) {
@@ -50,22 +98,28 @@ export async function POST(request: Request) {
   }
 
   const created: { id: string; number: number; label: string; words: number }[] = [];
+  const updated: { id: string; number: number }[] = [];
   const skipped: { number: number; reason: string }[] = [];
 
   for (const ch of chapters) {
-    const { title, text } = extractChapterText(ch.html || '');
+    const srcMap = await saveImages(ch.images || {});
+    const { title, text, displayHtml } = extractChapter(ch.html || '', srcMap);
     if (!text) {
       skipped.push({ number: ch.number, reason: 'no text extracted' });
       continue;
     }
     const label = ch.title || title || `Chapter ${ch.number}`;
 
-    // Skip re-captures of a chapter that's already in the book
     const existing = await prisma.chapter.findFirst({
       where: { bookId: book.id, number: ch.number },
     });
     if (existing) {
-      skipped.push({ number: ch.number, reason: 'already captured' });
+      // Already captured — refresh the presentation only, never the audio.
+      await prisma.chapter.update({
+        where: { id: existing.id },
+        data: { sourceHtml: displayHtml },
+      });
+      updated.push({ id: existing.id, number: ch.number });
       continue;
     }
 
@@ -73,6 +127,7 @@ export async function POST(request: Request) {
       data: {
         bookId: book.id,
         text,
+        sourceHtml: displayHtml,
         label,
         number: ch.number,
         isRead: false,
@@ -88,5 +143,5 @@ export async function POST(request: Request) {
     addTTSJob(row.id);
   }
 
-  return NextResponse.json({ bookId: book.id, created, skipped }, { headers: CORS });
+  return NextResponse.json({ bookId: book.id, created, updated, skipped }, { headers: CORS });
 }

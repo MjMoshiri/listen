@@ -1,9 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --background: #181a20;
-  --foreground: #f3f3f3;
+  /* Design tokens — the whole app draws from these */
+  --bg: #14161c;
+  --panel: #1d212b;
+  --panel-2: #232834;
+  --line: #2a303d;
+  --line-strong: #37404f;
+  --fg: #d7dde8;
+  --fg-strong: #eef3fb;
+  --fg-dim: #8a93a6;
   --accent: #4f8cff;
+  --accent-soft: rgba(79, 140, 255, 0.12);
+  --accent-line: rgba(79, 140, 255, 0.35);
+  --accent-text: #9fb7e0;
+  --ok: #3ecf8e;
+  --ok-soft: rgba(62, 207, 142, 0.12);
+  --warn: #e0a24f;
+  --warn-soft: rgba(224, 162, 79, 0.12);
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.12);
+  --radius: 10px;
+
+  /* Back-compat aliases used by older styles */
+  --background: var(--bg);
+  --foreground: var(--fg);
 }
 
 @theme inline {
@@ -13,38 +34,36 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: 'Inter', Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-geist-sans), 'Inter', system-ui, Arial, sans-serif;
   margin: 0;
   min-height: 100vh;
 }
 
 a {
   color: var(--accent);
-  text-decoration: underline;
+  text-decoration: none;
 }
+a:hover { text-decoration: underline; }
 
 button {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 0.75rem 1.5rem;
+  background: var(--panel-2);
+  color: var(--fg);
+  border: 1px solid var(--line-strong);
+  padding: 0.45rem 0.9rem;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.88rem;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
+button:hover:not(:disabled) { border-color: var(--accent); color: var(--fg-strong); }
 
 button:disabled {
-  background: #888;
+  opacity: 0.45;
   cursor: not-allowed;
 }
+
+::selection { background: var(--accent-line); }

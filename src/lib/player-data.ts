@@ -1,8 +1,13 @@
 /**
- * Data for the read-along player: chapter text as ordered blocks with audio
- * durations (one block per TTS chunk), plus prev/next navigation within the
- * book. Before chunks exist the blocks are derived from the chapter text so
- * the reader is usable while audio is still generating.
+ * Data for the read-along player.
+ *
+ * Chapters captured from O'Reilly carry sanitized display HTML whose block
+ * elements are stamped data-lb="<index>" — for those, blocks are aggregated
+ * to one per paragraph (a long paragraph may span several TTS chunks) so the
+ * indices line up with the HTML annotations. Chapters without display HTML
+ * (EPUB path, older captures) fall back to plain chunk-per-block text.
+ * Before chunks exist the blocks are derived from the chapter text so the
+ * reader is usable while audio is still generating.
  */
 
 import { prisma } from './prisma';
@@ -13,6 +18,13 @@ export interface PlayerBlock {
   text: string;
   duration: number | null;
   status: string;
+}
+
+export interface ChapterNavItem {
+  id: string;
+  number: number;
+  label: string | null;
+  hasAudio: boolean;
 }
 
 export interface PlayerData {
@@ -26,10 +38,49 @@ export interface PlayerData {
   book: { id: string; title: string };
   prevId: string | null;
   nextId: string | null;
+  chapters: ChapterNavItem[];
+  /** Sanitized O'Reilly chapter HTML with data-lb annotations, when the
+   *  block list can be aligned with it; otherwise null (plain-text view). */
+  sourceHtml: string | null;
   blocks: PlayerBlock[];
   done: number;
   total: number;
   generating: boolean;
+}
+
+interface ChunkRow {
+  index: number;
+  text: string;
+  duration: number | null;
+  status: string;
+}
+
+function splitParagraphs(text: string): string[] {
+  return text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+}
+
+/** Group TTS chunks back into one block per paragraph. Returns null when the
+ *  chunk list doesn't line up with the paragraphs (e.g. the LLM clean pass
+ *  merged paragraph breaks), in which case the caller falls back to plain. */
+function paragraphBlocks(paragraphs: string[], chunks: ChunkRow[]): PlayerBlock[] | null {
+  const counts = paragraphs.map(p => splitIntoSyncBlocks(p).length);
+  if (counts.reduce((a, b) => a + b, 0) !== chunks.length) return null;
+
+  const blocks: PlayerBlock[] = [];
+  let at = 0;
+  for (let i = 0; i < paragraphs.length; i++) {
+    const group = chunks.slice(at, at + counts[i]);
+    at += counts[i];
+    blocks.push({
+      index: i,
+      text: paragraphs[i],
+      duration: group.every(c => c.duration != null)
+        ? group.reduce((s, c) => s + (c.duration || 0), 0)
+        : null,
+      status: group.every(c => c.status === 'completed') ? 'completed' : 'pending',
+    });
+  }
+  return blocks;
 }
 
 export async function getPlayerData(chapterId: string): Promise<PlayerData | null> {
@@ -48,31 +99,32 @@ export async function getPlayerData(chapterId: string): Promise<PlayerData | nul
   const siblings = await prisma.chapter.findMany({
     where: { bookId: chapter.bookId, isArchived: false },
     orderBy: { number: 'asc' },
-    select: { id: true },
+    select: { id: true, number: true, label: true, hasAudio: true },
   });
   const at = siblings.findIndex(s => s.id === chapterId);
   const prevId = at > 0 ? siblings[at - 1].id : null;
   const nextId = at >= 0 && at < siblings.length - 1 ? siblings[at + 1].id : null;
 
-  let blocks: PlayerBlock[];
-  if (chapter.ttsChunks.length > 0) {
-    blocks = chapter.ttsChunks.map(c => ({
-      index: c.index,
-      text: c.text,
-      duration: c.duration,
-      status: c.status,
-    }));
-  } else {
-    const source = chapter.audioText || chapter.text || '';
-    blocks = splitIntoSyncBlocks(source).map((text, index) => ({
-      index,
-      text,
-      duration: null,
-      status: 'pending',
-    }));
+  const chunks = chapter.ttsChunks;
+  let sourceHtml = chapter.sourceHtml;
+  let blocks: PlayerBlock[] | null = null;
+
+  if (sourceHtml) {
+    // Rich view: one block per paragraph, aligned with the data-lb stamps.
+    const paragraphs = splitParagraphs(chapter.audioText || chapter.text || '');
+    blocks = chunks.length
+      ? paragraphBlocks(paragraphs, chunks)
+      : paragraphs.map((text, index) => ({ index, text, duration: null, status: 'pending' }));
+    if (!blocks) sourceHtml = null; // couldn't align — use the plain view
   }
 
-  const done = chapter.ttsChunks.filter(c => c.status === 'completed').length;
+  if (!blocks) {
+    blocks = chunks.length
+      ? chunks.map(c => ({ index: c.index, text: c.text, duration: c.duration, status: c.status }))
+      : splitIntoSyncBlocks(chapter.audioText || chapter.text || '').map((text, index) => ({
+          index, text, duration: null, status: 'pending',
+        }));
+  }
 
   return {
     chapter: {
@@ -85,9 +137,11 @@ export async function getPlayerData(chapterId: string): Promise<PlayerData | nul
     book: chapter.book,
     prevId,
     nextId,
+    chapters: siblings,
+    sourceHtml,
     blocks,
-    done,
-    total: chapter.ttsChunks.length || blocks.length,
-    generating: chapter.ttsChunks.length > 0 && !chapter.hasAudio,
+    done: chunks.filter(c => c.status === 'completed').length,
+    total: chunks.length || blocks.length,
+    generating: chunks.length > 0 && !chapter.hasAudio,
   };
 }

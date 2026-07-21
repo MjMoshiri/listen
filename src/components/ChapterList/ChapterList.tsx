@@ -1,289 +1,240 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import styles from './ChapterList.module.css';
 import EditChapterModal from '../Modals/EditChapterModal';
 
-export interface Chapter {
+export interface ChapterRow {
   id: string;
-  title: string;
-  cleared: boolean;
-  audioGenerated: boolean;
-  status: 'to-read' | 'read' | 'archived';
-  text: string;
-  clearedText?: string;
-  label?: string;
-  number?: number;
-  isRead?: boolean;
-  isArchived?: boolean;
+  number: number;
+  label: string | null;
+  hasCleaned: boolean;
+  hasAudio: boolean;
+  isRead: boolean;
+  isArchived: boolean;
+  stage: 'captured' | 'cleaned' | 'queued' | 'cleaning' | 'generating' | 'failed' | 'ready';
+  done: number;
+  total: number;
+  chunksFailed: number;
 }
 
 interface ChapterListProps {
-  chapters: Chapter[];
-  onSelect: (id: string, selected: boolean) => void;
+  chapters: ChapterRow[];
   selected: string[];
+  onSelect: (id: string, selected: boolean) => void;
   onAction: (action: string, ids: string[]) => void;
-  onEdit?: (chapter: Partial<Chapter>) => void;
+  onEdit?: (chapter: { id: string; label?: string; text?: string; clearedText?: string }) => void;
+  bookId: string;
 }
 
-const ChapterList: React.FC<ChapterListProps> = ({ chapters, onSelect, selected, onAction, onEdit }) => {
-  const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    'to-read': false,
-    'read': false,
-    'archived': false,
-  });
-  // Group chapters by their actual status
-  const grouped = {
-    'to-read': chapters.filter(c => !c.isRead && !c.isArchived),
-    'read': chapters.filter(c => c.isRead && !c.isArchived),
-    'archived': chapters.filter(c => c.isArchived),
-  };
+const STAGE_LABEL: Record<ChapterRow['stage'], string> = {
+  captured: 'Captured',
+  cleaned: 'Cleaned',
+  queued: 'Queued',
+  cleaning: 'Cleaning text',
+  generating: 'Generating audio',
+  failed: 'Failed',
+  ready: 'Ready',
+};
 
+function StagePill({ c }: { c: ChapterRow }) {
+  const cls =
+    c.stage === 'ready' ? styles.pillOk :
+    c.stage === 'failed' ? styles.pillDanger :
+    c.stage === 'cleaning' || c.stage === 'generating' || c.stage === 'queued' ? styles.pillActive :
+    styles.pillIdle;
+  const label =
+    c.stage === 'failed' ? `${c.chunksFailed} segment${c.chunksFailed === 1 ? '' : 's'} failed` :
+    STAGE_LABEL[c.stage];
+  return (
+    <span className={[styles.pill, cls].join(' ')}>
+      {(c.stage === 'cleaning' || c.stage === 'generating' || c.stage === 'queued') && (
+        <span className={styles.spinner} />
+      )}
+      {label}
+      {c.total > 0 && c.stage !== 'ready' && ` · ${c.done}/${c.total}`}
+    </span>
+  );
+}
 
-  const toggleGroup = (groupName: string) => {
-    setCollapsedGroups(prev => ({
-      ...prev,
-      [groupName]: !prev[groupName]
-    }));
-  };
+function Progress({ c }: { c: ChapterRow }) {
+  if (!['cleaning', 'generating'].includes(c.stage) || !c.total) return null;
+  return (
+    <div className={styles.progressTrack}>
+      <div className={styles.progressFill} style={{ width: `${(c.done / c.total) * 100}%` }} />
+    </div>
+  );
+}
 
-  const selectAllInGroup = (groupName: string, selectAll: boolean) => {
-    const groupChapters = grouped[groupName as keyof typeof grouped];
-    groupChapters.forEach(chapter => {
-      onSelect(chapter.id, selectAll);
-    });
-  };
+function RowMenu({ c, onAction, onEditClick }: {
+  c: ChapterRow;
+  onAction: (action: string, ids: string[]) => void;
+  onEditClick: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-  const getSelectedCountInGroup = (groupName: string) => {
-    const groupChapters = grouped[groupName as keyof typeof grouped];
-    return groupChapters.filter(chapter => selected.includes(chapter.id)).length;
-  };
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
 
-  const handleEditClick = (chapter: Chapter) => {
-    setEditingChapter(chapter);
-  };
+  const act = (action: string) => { setOpen(false); onAction(action, [c.id]); };
+  const busy = ['generating', 'cleaning', 'queued'].includes(c.stage);
 
-  const handleEditSave = (updatedChapter: Partial<Chapter>) => {
-    if (onEdit) {
-      onEdit(updatedChapter);
+  return (
+    <div className={styles.menuWrap} ref={ref}>
+      <button className={styles.menuBtn} onClick={() => setOpen(o => !o)} title="More actions">⋯</button>
+      {open && (
+        <div className={styles.menu}>
+          <button className={styles.menuItem} onClick={() => { setOpen(false); onEditClick(); }}>Edit text</button>
+          <button className={styles.menuItem} onClick={() => act(c.isRead ? 'unread' : 'read')}>
+            {c.isRead ? 'Mark unread' : 'Mark read'}
+          </button>
+          <button className={styles.menuItem} onClick={() => act(c.isArchived ? 'unarchive' : 'archive')}>
+            {c.isArchived ? 'Unarchive' : 'Archive'}
+          </button>
+          {!c.hasAudio && !busy && (
+            <button className={styles.menuItem} onClick={() => act('audio')}>Generate audio</button>
+          )}
+          {c.hasAudio && (
+            <>
+              <button className={styles.menuItem} onClick={() => act('download')}>Download mp3</button>
+              <button className={[styles.menuItem, styles.menuItemDanger].join(' ')} onClick={() => act('regenerate')}>
+                Regenerate audio
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const GROUPS: { key: string; title: string; filter: (c: ChapterRow) => boolean }[] = [
+  { key: 'to-read', title: 'To read', filter: c => !c.isRead && !c.isArchived },
+  { key: 'read', title: 'Read', filter: c => c.isRead && !c.isArchived },
+  { key: 'archived', title: 'Archived', filter: c => c.isArchived },
+];
+
+const ChapterList: React.FC<ChapterListProps> = ({ chapters, selected, onSelect, onAction, onEdit, bookId }) => {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({ archived: true });
+  const [editing, setEditing] = useState<any | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState<string | null>(null);
+
+  // Row text isn't in the polled status payload — fetch it when editing
+  const openEditor = async (c: ChapterRow) => {
+    setLoadingEdit(c.id);
+    try {
+      const r = await fetch(`/api/chapters?bookId=${bookId}`);
+      const all = await r.json();
+      const full = Array.isArray(all) ? all.find((x: any) => x.id === c.id) : null;
+      if (full) {
+        setEditing({
+          id: full.id,
+          title: full.label || `Chapter ${full.number}`,
+          label: full.label,
+          number: full.number,
+          text: full.text || '',
+          clearedText: full.audioText || '',
+          cleared: !!full.hasCleaned,
+          audioGenerated: !!full.hasAudio,
+          status: 'to-read',
+        });
+      }
+    } finally {
+      setLoadingEdit(null);
     }
-    setEditingChapter(null);
-  };  const getActionButtons = (chapter: Chapter) => {
-    return (
-      <div className={styles.actionButtons}>
-        <button 
-          className={styles.editBtn}
-          onClick={() => handleEditClick(chapter)}
-          title="Edit chapter text and label"
-        >
-          Edit
-        </button>
-        
-        {!chapter.isRead ? (
-          <button 
-            className={styles.readBtn}
-            onClick={() => onAction('read', [chapter.id])}
-            title="Mark as read"
-          >
-            Mark Read
-          </button>
-        ) : (
-          <button 
-            className={styles.unreadBtn}
-            onClick={() => onAction('unread', [chapter.id])}
-            title="Mark as unread"
-          >
-            Mark Unread
-          </button>
-        )}
-        
-        {!chapter.isArchived ? (
-          <button 
-            className={styles.archiveBtn}
-            onClick={() => onAction('archive', [chapter.id])}
-            title="Archive chapter"
-          >
-            Archive
-          </button>
-        ) : (
-          <button 
-            className={styles.unarchiveBtn}
-            onClick={() => onAction('unarchive', [chapter.id])}
-            title="Unarchive chapter"
-          >
-            Unarchive
-          </button>
-        )}
-        
-        <button 
-          className={styles.clearBtn}
-          onClick={() => onAction('clear', [chapter.id])}
-          disabled={chapter.cleared}
-          title={chapter.cleared ? "Already cleared" : "Clean text for audio generation"}
-        >
-          {chapter.cleared ? 'Cleared' : 'Clear'}
-        </button>
-          <button 
-          className={styles.audioBtn}
-          onClick={() => onAction('audio', [chapter.id])}
-          disabled={chapter.audioGenerated}
-          title={chapter.audioGenerated ? "Audio already generated" : "Generate audio"}
-        >
-          {chapter.audioGenerated ? 'Audio Ready' : 'Generate Audio'}
-        </button>
-        
-        {chapter.audioGenerated && (
-          <button 
-            className={styles.regenerateBtn}
-            onClick={() => onAction('regenerate', [chapter.id])}
-            title="Regenerate audio (will overwrite existing audio)"
-          >
-            Regenerate
-          </button>
-        )}
-        
-        <button 
-          className={styles.downloadBtn}
-          onClick={() => onAction('download', [chapter.id])}
-          disabled={!chapter.audioGenerated}
-          title={chapter.audioGenerated ? "Download audio file" : "No audio available"}
-        >
-          Download
-        </button>
-      </div>
-    );
-  };  return (
-    <div className={styles.chapterList}>
-      {Object.entries(grouped).map(([status, items]) => (
-        items.length > 0 && (
-          <div key={status} className={styles.group}>
-            <div className={styles.groupHeader}>
-              <h3 
-                className={styles.groupTitle}
-                onClick={() => toggleGroup(status)}
-                style={{ cursor: 'pointer', userSelect: 'none' }}
+  };
+
+  const toggleGroup = (key: string) => setCollapsed(p => ({ ...p, [key]: !p[key] }));
+
+  return (
+    <div className={styles.list}>
+      {GROUPS.map(g => {
+        const items = chapters.filter(g.filter);
+        if (items.length === 0) return null;
+        const selectedInGroup = items.filter(c => selected.includes(c.id)).length;
+        return (
+          <section key={g.key} className={styles.group}>
+            <header className={styles.groupHeader}>
+              <button className={styles.groupToggle} onClick={() => toggleGroup(g.key)}>
+                <span className={styles.chevron}>{collapsed[g.key] ? '▸' : '▾'}</span>
+                {g.title}
+                <span className={styles.groupCount}>{items.length}</span>
+              </button>
+              <button
+                className={styles.groupSelect}
+                onClick={() => items.forEach(c => onSelect(c.id, selectedInGroup !== items.length))}
               >
-                <span className={styles.collapseIcon}>
-                  {collapsedGroups[status] ? '▶' : '▼'}
-                </span>
-                {status.replace('-', ' ').toUpperCase()} ({items.length})
-              </h3>
-              
-              <div className={styles.groupActions}>
-                <button
-                  className={styles.selectAllBtn}
-                  onClick={() => {
-                    const selectedInGroup = getSelectedCountInGroup(status);
-                    const allSelected = selectedInGroup === items.length;
-                    selectAllInGroup(status, !allSelected);
-                  }}
-                >
-                  {getSelectedCountInGroup(status) === items.length && items.length > 0 
-                    ? 'Deselect All' 
-                    : `Select All (${items.length})`}
-                </button>
-                
-                {getSelectedCountInGroup(status) > 0 && (
-                  <span className={styles.selectedCount}>
-                    {getSelectedCountInGroup(status)} selected
-                  </span>
-                )}
-              </div>
-            </div>
-            
-            {!collapsedGroups[status] && (
-              <div className={styles.groupContent}>
-                {items.map(chapter => (
-                  <div key={chapter.id} className={styles.chapterItem}>
-                    <div className={styles.chapterHeader}>
-                      <input
-                        type="checkbox"
-                        className={styles.checkbox}
-                        checked={selected.includes(chapter.id)}
-                        onChange={e => onSelect(chapter.id, e.target.checked)}
-                      />
-                      <span className={styles.title}>{chapter.title}</span>
-                        <div className={styles.statusIndicators}>
-                        <span className={chapter.cleared ? styles.cleared : styles.notCleared}>
-                          {chapter.cleared ? '✓ Cleared' : '○ Not Cleared'}
-                        </span>                        <span className={chapter.audioGenerated ? styles.audio : styles.noAudio}>
-                          {chapter.audioGenerated ? '🔊 Audio' : '🔇 No Audio'}
-                        </span>
+                {selectedInGroup === items.length ? 'Deselect all' : 'Select all'}
+              </button>
+            </header>
+
+            {!collapsed[g.key] && (
+              <div className={styles.rows}>
+                {items.map(c => (
+                  <div key={c.id} className={[styles.row, c.isRead ? styles.rowRead : ''].join(' ')}>
+                    <input
+                      type="checkbox"
+                      className={styles.checkbox}
+                      checked={selected.includes(c.id)}
+                      onChange={e => onSelect(c.id, e.target.checked)}
+                    />
+                    <div className={styles.main}>
+                      <a href={`/player/${c.id}`} className={styles.title}>
+                        {c.label || `Chapter ${c.number}`}
+                      </a>
+                      <div className={styles.sub}>
+                        <StagePill c={c} />
+                        <Progress c={c} />
+                        {loadingEdit === c.id && <span className={styles.loadingDot}>loading…</span>}
                       </div>
                     </div>
-                    
-                    {getActionButtons(chapter)}
-                    
-                    <details className={styles.textCollapse}>
-                      <summary className={styles.summary}>Show Text</summary>
-                      <div className={styles.text}>
-                        {chapter.clearedText ? (
-                          <div>
-                            <strong>Cleaned Text:</strong>
-                            <div className={styles.clearedText}>{chapter.clearedText}</div>
-                            {chapter.text !== chapter.clearedText && (
-                              <details style={{ marginTop: '1rem' }}>
-                                <summary>Show Original Text</summary>
-                                <div className={styles.originalText}>{chapter.text}</div>
-                              </details>
-                            )}
-                          </div>
-                        ) : (
-                          <div>
-                            <strong>Original Text:</strong>
-                            <div className={styles.unclearedText}>{chapter.text}</div>
-                          </div>
-                        )}
-                      </div>
-                    </details>
+                    <div className={styles.actions}>
+                      {c.hasAudio ? (
+                        <a href={`/player/${c.id}`} className={styles.listenBtn}>▶ Listen</a>
+                      ) : c.stage === 'captured' || c.stage === 'cleaned' ? (
+                        <button className={styles.generateBtn} onClick={() => onAction('audio', [c.id])}>
+                          Generate
+                        </button>
+                      ) : c.stage === 'failed' ? (
+                        <button className={styles.generateBtn} onClick={() => onAction('audio', [c.id])}>
+                          Retry
+                        </button>
+                      ) : null}
+                      <RowMenu c={c} onAction={onAction} onEditClick={() => openEditor(c)} />
+                    </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        )
-      ))}
-      
-      {/* Batch actions */}
+          </section>
+        );
+      })}
+
       {selected.length > 0 && (
-        <div className={styles.batchActions}>
-          <div className={styles.batchTitle}>
-            Batch Actions ({selected.length} selected)
-          </div>
-          <div className={styles.batchButtons}>
-            <button onClick={() => onAction('read', selected)} className={styles.batchReadBtn}>
-              Mark as Read
-            </button>
-            <button onClick={() => onAction('unread', selected)} className={styles.batchUnreadBtn}>
-              Mark as Unread
-            </button>
-            <button onClick={() => onAction('archive', selected)} className={styles.batchArchiveBtn}>
-              Archive
-            </button>
-            <button onClick={() => onAction('unarchive', selected)} className={styles.batchUnarchiveBtn}>
-              Unarchive
-            </button>
-            <button onClick={() => onAction('clear', selected)} className={styles.batchClearBtn}>
-              Clear Selected
-            </button>            <button onClick={() => onAction('audio', selected)} className={styles.batchAudioBtn}>
-              Generate Audio
-            </button>
-            <button onClick={() => onAction('regenerate', selected)} className={styles.batchRegenerateBtn}>
-              Regenerate Audio
-            </button>
-            <button onClick={() => onAction('download', selected)} className={styles.batchDownloadBtn}>
-              Download All
-            </button>
-          </div>
+        <div className={styles.batchBar}>
+          <span className={styles.batchCount}>{selected.length} selected</span>
+          <button onClick={() => onAction('read', selected)}>Mark read</button>
+          <button onClick={() => onAction('unread', selected)}>Mark unread</button>
+          <button onClick={() => onAction('archive', selected)}>Archive</button>
+          <button onClick={() => onAction('audio', selected)}>Generate audio</button>
+          <button onClick={() => onAction('download', selected)}>Download</button>
+          <button className={styles.batchClear} onClick={() => chapters.forEach(c => onSelect(c.id, false))}>
+            ✕
+          </button>
         </div>
       )}
 
-      {/* Edit Modal */}
-      {editingChapter && (
+      {editing && (
         <EditChapterModal
-          chapter={editingChapter}
-          isOpen={!!editingChapter}
-          onClose={() => setEditingChapter(null)}
-          onSave={handleEditSave}
+          chapter={editing}
+          isOpen={!!editing}
+          onClose={() => setEditing(null)}
+          onSave={ch => { onEdit?.(ch as any); setEditing(null); }}
         />
       )}
     </div>

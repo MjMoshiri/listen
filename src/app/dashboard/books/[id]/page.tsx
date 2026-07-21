@@ -1,104 +1,69 @@
 "use client";
 
-import { use, useEffect, useState } from 'react';
-import BookPage from '@/components/BookPage/BookPage';
-import ChapterList, { Chapter } from '@/components/ChapterList/ChapterList';
+import { use, useCallback, useEffect, useState } from 'react';
+import ChapterList, { ChapterRow } from '@/components/ChapterList/ChapterList';
 import { useRouter } from 'next/navigation';
+import styles from './book.module.css';
+
+interface BookStatus {
+  bookId: string;
+  title: string;
+  isProcessing: boolean;
+  chapters: ChapterRow[];
+}
 
 export default function BookDetailPage({ params }: { params: { id: string } | Promise<{ id: string }> }) {
-  // Unwrap params if it's a Promise (Next.js 14+)
   const unwrappedParams = params instanceof Promise ? use(params) : params;
   const id = unwrappedParams.id;
-  const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [book, setBook] = useState<{ id: string; title: string } | null>(null);
+  const [status, setStatus] = useState<BookStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const router = useRouter();
 
-  useEffect(() => {
-    const fetchBookDetails = async () => {
-      setLoading(true);
-      try {        const statusRes = await fetch(`/api/books/${id}/status`);
-        if (!statusRes.ok) throw new Error('Failed to fetch book status');
-        const statusData = await statusRes.json();
-        setBook({ id: statusData.bookId, title: statusData.title });        setChapters((statusData.chapters || []).map((c: any) => ({
-          id: c.id,
-          title: `${c.number}: ${c.label || 'Unnamed Chapter'}`,
-          cleared: !!c.hasCleaned,
-          audioGenerated: !!c.hasAudio,
-          status: c.isArchived ? 'archived' : (c.isRead ? 'read' : 'to-read'),
-          text: c.text,
-          clearedText: c.audioText,
-          label: c.label,
-          number: c.number,
-          isRead: c.isRead,
-          isArchived: c.isArchived,
-        })));
-        setIsProcessing(statusData.isProcessing || false);
-      } catch (err) {
-        setError('Failed to load book data');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchBookDetails();
+  const refresh = useCallback(async () => {
+    const res = await fetch(`/api/books/${id}/status`);
+    if (!res.ok) throw new Error('Failed to fetch book status');
+    const data: BookStatus = await res.json();
+    setStatus(data);
+    return data;
   }, [id]);
 
   useEffect(() => {
-    if (isProcessing) {
-      const interval = setInterval(async () => {
-        try {
-          const statusRes = await fetch(`/api/books/${id}/status`);
-          if (statusRes.ok) {
-            const statusData = await statusRes.json();            setChapters((statusData.chapters || []).map((c: any) => ({
-              id: c.id,
-              title: `${c.number}: ${c.label || 'Unnamed Chapter'}`,
-              cleared: !!c.hasCleaned,
-              audioGenerated: !!c.hasAudio,
-              status: c.isArchived ? 'archived' : (c.isRead ? 'read' : 'to-read'),
-              text: c.text,
-              clearedText: c.audioText,
-              label: c.label,
-              number: c.number,
-              isRead: c.isRead,
-              isArchived: c.isArchived,
-            })));
-            setIsProcessing(statusData.isProcessing || false);
-          }
-        } catch {}
-      }, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [isProcessing, id]);
+    refresh().catch(() => setError('Failed to load book data')).finally(() => setLoading(false));
+  }, [refresh]);
+
+  // Poll while the pipeline is working so stage pills and bars move live
+  useEffect(() => {
+    if (!status?.isProcessing) return;
+    const t = setInterval(() => refresh().catch(() => {}), 3000);
+    return () => clearInterval(t);
+  }, [status?.isProcessing, refresh]);
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this book?')) return;
+    if (!confirm('Delete this book and all its chapters?')) return;
     setDeleting(true);
     setError('');
     try {
       const res = await fetch(`/api/books/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete book');
       router.push('/dashboard');
-    } catch (err) {
+    } catch {
       setError('Failed to delete book');
       setDeleting(false);
     }
   };
 
   const handleSelect = (chapterId: string, isSelected: boolean) => {
-    setSelected(prev => isSelected ? [...prev, chapterId] : prev.filter(id => id !== chapterId));
+    setSelected(prev => (isSelected ? [...new Set([...prev, chapterId])] : prev.filter(x => x !== chapterId)));
   };
+
   const handleAction = async (action: string, ids: string[]) => {
     if (ids.length === 0) return;
-    
     setError('');
-    
     try {
-      let response;
-      
+      let response: Response;
       switch (action) {
         case 'read':
         case 'unread':
@@ -110,22 +75,13 @@ export default function BookDetailPage({ params }: { params: { id: string } | Pr
             body: JSON.stringify({ chapterIds: ids, action }),
           });
           break;
-          
-        case 'clear':
-          response = await fetch('/api/clear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ chapterIds: ids }),
-          });
-          break;
-            case 'audio':
+        case 'audio':
           response = await fetch('/api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chapterIds: ids }),
           });
           break;
-          
         case 'regenerate':
           response = await fetch('/api/regenerate', {
             method: 'POST',
@@ -133,14 +89,12 @@ export default function BookDetailPage({ params }: { params: { id: string } | Pr
             body: JSON.stringify({ chapterIds: ids }),
           });
           break;
-          
-        case 'download':
+        case 'download': {
           response = await fetch('/api/download', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chapterIds: ids }),
           });
-          
           if (response.ok) {
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
@@ -154,44 +108,22 @@ export default function BookDetailPage({ params }: { params: { id: string } | Pr
             return;
           }
           break;
-          
+        }
         default:
           throw new Error(`Unknown action: ${action}`);
       }
-        if (!response.ok) {
-        const errorData = await response.json();
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || `Failed to ${action}`);
       }
-      
-      // Refresh chapter data
-      const statusRes = await fetch(`/api/books/${id}/status`);
-      if (statusRes.ok) {
-        const statusData = await statusRes.json();
-        console.log('Refreshed chapter data after action:', statusData.chapters);
-        setChapters((statusData.chapters || []).map((c: any) => ({
-          id: c.id,
-          title: `${c.number}: ${c.label || 'Unnamed Chapter'}`,
-          cleared: !!c.hasCleaned,
-          audioGenerated: !!c.hasAudio,
-          status: c.isArchived ? 'archived' : (c.isRead ? 'read' : 'to-read'),
-          text: c.text,
-          clearedText: c.audioText,
-          label: c.label,
-          number: c.number,
-          isRead: c.isRead,
-          isArchived: c.isArchived,
-        })));
-      }
-      
-      // Clear selection after action
+      await refresh();
       setSelected([]);
-      
     } catch (err) {
       setError(`Failed to ${action}: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
-  const handleEdit = async (updatedChapter: Partial<Chapter>) => {
+  const handleEdit = async (updatedChapter: { id: string; label?: string; text?: string; clearedText?: string }) => {
     setError('');
     try {
       const response = await fetch('/api/edit', {
@@ -199,135 +131,55 @@ export default function BookDetailPage({ params }: { params: { id: string } | Pr
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chapter: updatedChapter }),
       });
-      
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.error || 'Failed to update chapter');
       }
-      
-      // Refresh chapter data
-      const statusRes = await fetch(`/api/books/${id}/status`);
-      if (statusRes.ok) {
-        const statusData = await statusRes.json();
-        setChapters((statusData.chapters || []).map((c: any) => ({
-          id: c.id,
-          title: `${c.number}: ${c.label || 'Unnamed Chapter'}`,
-          cleared: !!c.hasCleaned,
-          audioGenerated: !!c.hasAudio,
-          status: c.isArchived ? 'archived' : (c.isRead ? 'read' : 'to-read'),
-          text: c.text,
-          clearedText: c.audioText,
-          label: c.label,
-          number: c.number,
-          isRead: c.isRead,
-          isArchived: c.isArchived,
-        })));
-      }
-      
+      await refresh();
     } catch (err) {
       setError(`Failed to update chapter: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
-  if (loading) return <BookPage><div style={{ textAlign: 'center', padding: '3rem', color: '#888' }}>Loading book details...</div></BookPage>;
+
+  if (loading) return <div className={styles.loading}>Loading book…</div>;
+
+  const chapters = status?.chapters || [];
+  const ready = chapters.filter(c => c.hasAudio).length;
+  const working = chapters.filter(c => ['queued', 'cleaning', 'generating'].includes(c.stage)).length;
 
   return (
-    <BookPage>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ color: '#eaf1fb', marginBottom: '1rem' }}>{book?.title || 'Book'}</h1>
-        
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <button 
-            onClick={handleDelete} 
-            disabled={deleting}
-            style={{
-              background: 'linear-gradient(135deg, #e17055 0%, #d63031 100%)',
-              color: 'white',
-              border: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '8px',
-              cursor: deleting ? 'not-allowed' : 'pointer',
-              fontWeight: '500',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            {deleting ? 'Deleting...' : 'Delete Book'}
-          </button>
-          
-          <a 
-            href={`/uploads/${id}.epub`} 
-            download
-            style={{
-              background: 'linear-gradient(135deg, #4f8cff 0%, #6fa8ff 100%)',
-              color: 'white',
-              textDecoration: 'none',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '8px',
-              fontWeight: '500',
-              transition: 'all 0.2s ease',
-              display: 'inline-block',
-            }}
-          >
-            Download EPUB
-          </a>
-          
-          <button 
-            onClick={() => router.push('/dashboard')}
-            style={{
-              background: 'rgba(136, 136, 136, 0.2)',
-              color: '#888',
-              border: '1px solid rgba(136, 136, 136, 0.3)',
-              padding: '0.75rem 1.5rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              fontWeight: '500',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            ← Back to Dashboard
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div style={{
-          background: 'rgba(255, 79, 79, 0.15)',
-          color: '#ff6b6b',
-          padding: '1rem 1.5rem',
-          borderRadius: '8px',
-          border: '1px solid rgba(255, 79, 79, 0.3)',
-          marginBottom: '2rem',
-        }}>
-          {error}
-        </div>
-      )}
-
-      <h2 style={{ color: '#4f8cff', marginBottom: '1rem' }}>Chapters</h2>
-      
-      {isProcessing ? (
-        <div style={{
-          padding: '2rem',
-          background: 'linear-gradient(135deg, #23262f 0%, #2d3140 100%)',
-          borderRadius: '12px',
-          marginBottom: '2rem',
-          textAlign: 'center',
-          border: '1px solid rgba(79, 140, 255, 0.2)',
-        }}>
-          <div style={{ color: '#4f8cff', fontSize: '1.1rem', marginBottom: '0.5rem' }}>
-            📚 Processing EPUB file...
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <a href="/dashboard" className={styles.back} title="Back to library">←</a>
+        <div className={styles.headText}>
+          <h1 className={styles.title}>{status?.title || 'Book'}</h1>
+          <div className={styles.meta}>
+            {chapters.length} chapters · {ready} with audio
+            {working > 0 && <span className={styles.metaWorking}> · {working} in progress</span>}
           </div>
-          <div style={{ color: '#888' }}>
-            Extracting chapters and preparing content. This may take a few minutes.
-          </div>
+        </div>
+        <button onClick={handleDelete} disabled={deleting} className={styles.deleteBtn}>
+          {deleting ? 'Deleting…' : 'Delete book'}
+        </button>
+      </header>
+
+      {error && <div className={styles.error}>{error}</div>}
+
+      {chapters.length === 0 ? (
+        <div className={styles.empty}>
+          <div className={styles.emptyTitle}>Processing…</div>
+          <div>Extracting chapters and preparing content.</div>
         </div>
       ) : (
         <ChapterList
           chapters={chapters}
-          onSelect={handleSelect}
           selected={selected}
+          onSelect={handleSelect}
           onAction={handleAction}
           onEdit={handleEdit}
+          bookId={id}
         />
       )}
-    </BookPage>
+    </div>
   );
 }

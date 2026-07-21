@@ -118,11 +118,12 @@
       const meta = await r.json();
       const contentUrl = meta.content || meta.content_url || meta.contentUrl;
       if (!contentUrl) throw new Error('chapter API returned no content URL');
-      const r2 = await fetch(proxied(contentUrl), { credentials: 'include' });
+      const finalUrl = proxied(contentUrl);
+      const r2 = await fetch(finalUrl, { credentials: 'include' });
       if (!r2.ok) throw new Error(`HTTP ${r2.status} for chapter content`);
-      return r2.text();
+      return { html: await r2.text(), baseUrl: finalUrl };
     }
-    return r.text();
+    return { html: await r.text(), baseUrl: proxied(url) };
   }
 
   // Guard against capturing the React app shell instead of chapter content.
@@ -140,14 +141,45 @@
     let lastErr = 'no content source for chapter';
     for (const url of candidates) {
       try {
-        const html = await fetchChapterFrom(url);
-        if (looksLikeChapter(html)) return html;
+        const result = await fetchChapterFrom(url);
+        if (looksLikeChapter(result.html)) return result;
         lastErr = 'got app shell, not chapter content';
       } catch (e) {
         lastErr = e.message;
       }
     }
     throw new Error(lastErr);
+  }
+
+  // Fetch the chapter's images through the logged-in session so the Listen
+  // app can save local copies (it has no O'Reilly access of its own).
+  // Keyed by the raw src attribute value so the server can match img tags.
+  async function collectImages(html, baseUrl) {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const srcs = new Set();
+    for (const img of doc.querySelectorAll('img[src]')) {
+      const src = img.getAttribute('src');
+      if (src && !src.startsWith('data:')) srcs.add(src);
+    }
+
+    const images = {};
+    await Promise.all([...srcs].map(async src => {
+      try {
+        const url = proxied(new URL(src, baseUrl).href);
+        const r = await fetch(url, { credentials: 'include' });
+        if (!r.ok) return;
+        const blob = await r.blob();
+        if (!blob.type.startsWith('image/') || blob.size > 10_000_000) return;
+        const dataUrl = await new Promise((resolve, reject) => {
+          const fr = new FileReader();
+          fr.onload = () => resolve(fr.result);
+          fr.onerror = reject;
+          fr.readAsDataURL(blob);
+        });
+        images[src] = { data: dataUrl.split(',')[1], type: blob.type };
+      } catch { /* image stays missing; the app hides it */ }
+    }));
+    return images;
   }
 
   function sendToListen(payload) {
@@ -240,14 +272,19 @@
         const st = box.parentElement.querySelector('.listen-row-status');
         st.textContent = '…';
         try {
-          const html = await fetchChapterHtml(s);
+          const { html, baseUrl } = await fetchChapterHtml(s);
+          st.textContent = '… images';
+          const images = await collectImages(html, baseUrl);
+          st.textContent = '… sending';
           const resp = await sendToListen({
             bookTitle,
-            chapters: [{ title: s.title, number: i + 1, html }],
+            chapters: [{ title: s.title, number: i + 1, html, images }],
           });
           if (!resp.ok) throw new Error(resp.error || resp.data?.error || 'capture failed');
           const skippedReason = resp.data?.skipped?.[0]?.reason;
-          st.textContent = skippedReason ? `skipped (${skippedReason})` : '✓ audio queued';
+          st.textContent = skippedReason
+            ? `skipped (${skippedReason})`
+            : resp.data?.updated?.length ? '✓ presentation updated' : '✓ audio queued';
         } catch (e) {
           st.textContent = `✗ ${e.message}`.slice(0, 60);
         }

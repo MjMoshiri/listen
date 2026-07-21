@@ -1,66 +1,76 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import Dashboard from '@/components/Dashboard/Dashboard';
-import BookList from '@/components/BookList/BookList';
-import SelfhostToggle from '@/components/SelfhostToggle/SelfhostToggle';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import uploadButtonStyles from './uploadButton.module.css';
+import SelfhostToggle from '@/components/SelfhostToggle/SelfhostToggle';
+import styles from './dashboard.module.css';
+
+interface BookSummary {
+  id: string;
+  title: string;
+  chapterCount: number;
+  readyCount: number;
+  readCount: number;
+  workingCount: number;
+}
 
 export default function DashboardPage() {
-  const [books, setBooks] = useState<any[]>([]);
-  const router = useRouter();
+  const [books, setBooks] = useState<BookSummary[] | null>(null);
 
   useEffect(() => {
     fetch('/api/books')
       .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setBooks(data);
-        } else if (data && Array.isArray(data.books)) {
-          setBooks(data.books);
-        } else {
-          setBooks([]);
-        }
-      });
+      .then(data => setBooks(Array.isArray(data) ? data : []))
+      .catch(() => setBooks([]));
   }, []);
 
-  const handleUpload = async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    await fetch('/api/books', {
-      method: 'POST',
-      body: formData,
-    });
-    // Refresh book list
-    fetch('/api/books')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setBooks(data);
-        } else if (data && Array.isArray(data.books)) {
-          setBooks(data.books);
-        } else {
-          setBooks([]);
-        }
-      });
-  };
-
-  const handleSelectBook = (id: string) => {
-    router.push(`/dashboard/books/${id}`);
-  };
-
   return (
-    <Dashboard>
-      <h1>Dashboard</h1>
-      <SelfhostToggle />
-      <Link href="/dashboard/upload">
-        <button className={uploadButtonStyles.uploadButton}>
-          Upload New Book
-        </button>
-      </Link>
-      <BookList books={books} onSelect={handleSelectBook} />
-    </Dashboard>
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <div className={styles.brand}>
+          <span className={styles.logo}>🎧</span>
+          <h1 className={styles.appName}>Listen</h1>
+        </div>
+        <div className={styles.headerActions}>
+          <SelfhostToggle />
+          <Link href="/dashboard/upload" className={styles.uploadBtn}>
+            + Upload EPUB
+          </Link>
+        </div>
+      </header>
+
+      <h2 className={styles.sectionTitle}>Library</h2>
+
+      {books === null ? (
+        <div className={styles.hint}>Loading…</div>
+      ) : books.length === 0 ? (
+        <div className={styles.hint}>
+          No books yet. Upload an EPUB, or capture chapters from O&apos;Reilly with the browser extension.
+        </div>
+      ) : (
+        <div className={styles.grid}>
+          {books.map(book => (
+            <Link key={book.id} href={`/dashboard/books/${book.id}`} className={styles.card}>
+              <div className={styles.cardTitle}>{book.title}</div>
+              <div className={styles.cardMeta}>
+                {book.chapterCount} chapter{book.chapterCount === 1 ? '' : 's'}
+              </div>
+              <div className={styles.cardStats}>
+                <span className={styles.statReady}>♪ {book.readyCount} ready</span>
+                {book.readCount > 0 && <span className={styles.statRead}>✓ {book.readCount} read</span>}
+              </div>
+              {book.chapterCount > 0 && (
+                <div className={styles.cardTrack}>
+                  <div
+                    className={styles.cardFill}
+                    style={{ width: `${(book.readyCount / book.chapterCount) * 100}%` }}
+                  />
+                </div>
+              )}
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

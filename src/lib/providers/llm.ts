@@ -58,13 +58,19 @@ async function cleanPiece(text: string): Promise<string> {
 /**
  * Chapters are cleaned in ~500-word pieces and rejoined: a full chapter
  * (15-20k words) exceeds the endpoint's per-slot context, and a clean pass
- * outputs roughly its input size.
+ * outputs roughly its input size. onProgress reports pieces done/total so
+ * the dashboard can show the cleaning stage moving.
  */
-export async function cleanTextForSpeech(text: string): Promise<string> {
+export async function cleanTextForSpeech(
+  text: string,
+  onProgress?: (done: number, total: number) => void,
+): Promise<string> {
   const pieces = splitTextIntoParagraphs(text);
+  onProgress?.(0, pieces.length);
   const cleaned: string[] = [];
   for (const piece of pieces) {
     cleaned.push(await cleanPiece(piece));
+    onProgress?.(cleaned.length, pieces.length);
   }
   return cleaned.join('\n\n');
 }
