@@ -47,6 +47,26 @@
     return null;
   }
 
+  // New React reader (2025+): no embedded htmlContext, but the TOC sidebar is
+  // rendered in the DOM. Chapter files are the depth-1 links without #anchors.
+  function tocFromDom() {
+    const root = document.querySelector('[data-testid="tocItems"]');
+    if (!root) return null;
+    const seen = new Set();
+    const out = [];
+    for (const a of root.querySelectorAll('a[href*="/library/view/"]')) {
+      const href = a.getAttribute('href') || '';
+      if (href.includes('#')) continue; // sub-section anchor within a chapter file
+      const file = href.split('/').filter(Boolean).pop();
+      if (!file || seen.has(file)) continue;
+      seen.add(file);
+      const title = (a.textContent || '').trim();
+      if (!title) continue;
+      out.push({ title, depth: 1, file });
+    }
+    return out.length ? out : null;
+  }
+
   async function tocFromApi() {
     for (const path of [`/api/v1/book/${ISBN}/flat-toc/`, `/api/v1/book/${ISBN}/toc/`]) {
       try {
@@ -80,19 +100,54 @@
 
   // ── Chapter fetching ───────────────────────────────────────────────────────
 
-  async function fetchChapterHtml(apiUrl) {
-    const r = await fetch(apiUrl, { credentials: 'include' });
-    if (!r.ok) throw new Error(`HTTP ${r.status} for ${apiUrl}`);
+  // Through ezproxy the API lives on the current (proxied) origin, so rewrite
+  // absolute oreilly.com URLs the APIs hand back onto location.origin.
+  function proxied(url) {
+    const u = new URL(url, location.origin);
+    if (u.origin !== location.origin && /(^|\.)oreilly\.com$/.test(u.hostname)) {
+      return location.origin + u.pathname + u.search;
+    }
+    return u.href;
+  }
+
+  async function fetchChapterFrom(url) {
+    const r = await fetch(proxied(url), { credentials: 'include' });
+    if (!r.ok) throw new Error(`HTTP ${r.status} for ${url}`);
     const ct = r.headers.get('content-type') || '';
     if (ct.includes('json')) {
       const meta = await r.json();
       const contentUrl = meta.content || meta.content_url || meta.contentUrl;
       if (!contentUrl) throw new Error('chapter API returned no content URL');
-      const r2 = await fetch(contentUrl, { credentials: 'include' });
+      const r2 = await fetch(proxied(contentUrl), { credentials: 'include' });
       if (!r2.ok) throw new Error(`HTTP ${r2.status} for chapter content`);
       return r2.text();
     }
     return r.text();
+  }
+
+  // Guard against capturing the React app shell instead of chapter content.
+  function looksLikeChapter(html) {
+    return html.length > 200 && !html.includes('htmlContext') && !/<div[^>]+id=["']root["']/.test(html);
+  }
+
+  async function fetchChapterHtml(section) {
+    const candidates = [];
+    if (section.apiUrl) candidates.push(section.apiUrl);
+    if (section.file) {
+      candidates.push(`/api/v2/epubs/urn:orm:book:${ISBN}/files/${section.file}`);
+      candidates.push(`/api/v1/book/${ISBN}/chapter/${section.file}`);
+    }
+    let lastErr = 'no content source for chapter';
+    for (const url of candidates) {
+      try {
+        const html = await fetchChapterFrom(url);
+        if (looksLikeChapter(html)) return html;
+        lastErr = 'got app shell, not chapter content';
+      } catch (e) {
+        lastErr = e.message;
+      }
+    }
+    throw new Error(lastErr);
   }
 
   function sendToListen(payload) {
@@ -121,9 +176,10 @@
     panel.hidden = false;
     if (sections) return;
     panel.innerHTML = '<div class="listen-status">Loading table of contents…</div>';
-    sections = tocFromEmbeddedState() || (await tocFromApi());
+    sections = tocFromEmbeddedState() || tocFromDom() || (await tocFromApi());
     if (!sections) {
-      panel.innerHTML = '<div class="listen-status listen-error">Could not find the book TOC on this page.</div>';
+      panel.innerHTML =
+        '<div class="listen-status listen-error">Could not find the book TOC. Open the Table of Contents sidebar, then click Capture again.</div>';
       sections = null;
       return;
     }
@@ -131,7 +187,7 @@
   }
 
   function renderPanel() {
-    const chapters = sections.filter(s => s.apiUrl);
+    const chapters = sections.filter(s => s.apiUrl || s.file);
     panel.innerHTML = `
       <div class="listen-head">
         <strong>Capture chapters</strong>
@@ -184,7 +240,7 @@
         const st = box.parentElement.querySelector('.listen-row-status');
         st.textContent = '…';
         try {
-          const html = await fetchChapterHtml(s.apiUrl);
+          const html = await fetchChapterHtml(s);
           const resp = await sendToListen({
             bookTitle,
             chapters: [{ title: s.title, number: i + 1, html }],
