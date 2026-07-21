@@ -191,7 +191,7 @@
           });
           if (!resp.ok) throw new Error(resp.error || resp.data?.error || 'capture failed');
           const skippedReason = resp.data?.skipped?.[0]?.reason;
-          st.textContent = skippedReason ? `skipped (${skippedReason})` : '✓';
+          st.textContent = skippedReason ? `skipped (${skippedReason})` : '✓ audio queued';
         } catch (e) {
           st.textContent = `✗ ${e.message}`.slice(0, 60);
         }

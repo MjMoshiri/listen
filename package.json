@@ -13,7 +13,6 @@
     "db:studio": "prisma studio"
   },
   "dependencies": {
-    "@google/genai": "^1.5.1",
     "@prisma/client": "^6.9.0",
     "@types/fluent-ffmpeg": "^2.1.27",
     "@types/jsdom": "^21.1.7",

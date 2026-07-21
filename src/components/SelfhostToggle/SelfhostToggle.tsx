@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import styles from './SelfhostToggle.module.css';
 
 interface SelfhostStatus {
-  mode: 'gemini' | 'selfhost';
+  on: boolean;
   llmUrl: string;
   ttsUrl: string;
   ready: boolean;
@@ -25,14 +25,14 @@ export default function SelfhostToggle() {
     refresh();
   }, []);
 
-  const deploy = async () => {
+  const setPower = async (action: 'on' | 'off') => {
     setBusy(true);
     setError(null);
     try {
       const res = await fetch('/api/selfhost', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'deploy' }),
+        body: JSON.stringify({ action }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -44,47 +44,25 @@ export default function SelfhostToggle() {
     }
   };
 
-  const setMode = async (mode: 'gemini' | 'selfhost') => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fetch('/api/selfhost', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'mode', mode }),
-      });
-      await refresh();
-    } finally {
-      setBusy(false);
-    }
-  };
-
   if (!status) return null;
 
   return (
     <div className={styles.container}>
       <span className={styles.label}>
-        Backend:{' '}
-        <strong className={status.mode === 'selfhost' ? styles.selfhost : styles.gemini}>
-          {status.mode === 'selfhost' ? 'Selfhost (Modal)' : 'Gemini'}
+        Selfhost:{' '}
+        <strong className={status.on ? styles.on : styles.off}>
+          {status.on ? 'On' : 'Off'}
         </strong>
       </span>
 
-      {status.mode === 'gemini' && (
-        <button className={styles.button} disabled={busy} onClick={status.ready ? () => setMode('selfhost') : deploy}>
-          {busy ? 'Deploying… (~2 min)' : status.ready ? 'Switch to Selfhost' : 'Selfhost'}
+      {status.on ? (
+        <button className={styles.buttonSecondary} disabled={busy} onClick={() => setPower('off')}>
+          {busy ? 'Stopping…' : 'Turn Off'}
         </button>
-      )}
-
-      {status.mode === 'selfhost' && (
-        <>
-          <button className={styles.button} disabled={busy} onClick={deploy}>
-            {busy ? 'Deploying…' : 'Redeploy'}
-          </button>
-          <button className={styles.buttonSecondary} disabled={busy} onClick={() => setMode('gemini')}>
-            Switch to Gemini
-          </button>
-        </>
+      ) : (
+        <button className={styles.button} disabled={busy} onClick={() => setPower('on')}>
+          {busy ? 'Deploying… (~2 min)' : 'Turn On'}
+        </button>
       )}
 
       {error && <span className={styles.error}>{error}</span>}

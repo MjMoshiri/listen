@@ -88,6 +88,20 @@
   }
 }
 
+.playLink {
+  background: linear-gradient(135deg, #4f8cff 0%, #6fa8ff 100%);
+  color: white;
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.playLink:hover {
+  filter: brightness(1.1);
+}
+
 .actions button {
   background-color: #4b5563; /* Tailwind gray-600 */
   color: #f3f4f6; /* Tailwind gray-100 */

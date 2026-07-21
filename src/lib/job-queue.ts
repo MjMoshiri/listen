@@ -9,11 +9,13 @@ import { processEpubFile } from './epub-processor';
 import { prisma } from './prisma';
 import path from 'path';
 import fs from 'fs/promises';
-import { splitTextIntoParagraphs } from './text-chunker';
+import { splitIntoSyncBlocks } from './text-chunker';
 import { processAudioFilesFast } from './audio-simple';
 import { config } from './config';
 import { cleanTextForSpeech } from './providers/llm';
 import { synthesizeChunk } from './providers/tts';
+import { wavDurationSeconds } from './wav';
+import { selfhostReady } from './settings';
 
 // ─── Semaphore ───────────────────────────────────────────────────────────────
 
@@ -159,7 +161,12 @@ async function processTTSChunk(chunkId: string, retryCount = 0): Promise<void> {
 
     await prisma.tTSChunk.update({
       where: { id: chunkId },
-      data: { audioFile, status: 'completed', error: null },
+      data: {
+        audioFile,
+        duration: wavDurationSeconds(wavBuffer),
+        status: 'completed',
+        error: null,
+      },
     });
   } catch (e) {
     const errorMsg = e instanceof Error ? e.message : String(e);
@@ -223,6 +230,12 @@ export async function addChapterTTSJobAuto(chapterId: string) {
 
   if (!chapter) { console.error(`Chapter ${chapterId} not found`); return; }
   if (chapter.hasAudio) { console.log(`Chapter ${chapterId} already has audio`); return; }
+  if (!selfhostReady()) {
+    // Don't burn retries (or mark anything cleaned) against a dead backend —
+    // the chapter stays pending and can be generated once selfhost is on.
+    console.log(`Selfhost backend is off — chapter ${chapterId} captured but not processed`);
+    return;
+  }
 
   // Clean if needed
   let cleanText: string;
@@ -245,8 +258,9 @@ export async function addChapterTTSJobAuto(chapterId: string) {
     chunkRecords = existingChunks;
     console.log(`Resuming ${chapterId}: ${existingChunks.filter(c => c.status === 'completed').length}/${existingChunks.length} already done`);
   } else {
-    // Create new chunks
-    const texts = splitTextIntoParagraphs(cleanText);
+    // One chunk per paragraph: the read-along player highlights whichever
+    // block the audio is in, so chunk boundaries must match display blocks.
+    const texts = splitIntoSyncBlocks(cleanText);
     chunkRecords = await Promise.all(
       texts.map((text, idx) => prisma.tTSChunk.create({ data: { chapterId, index: idx, text, status: 'pending' } }))
     );

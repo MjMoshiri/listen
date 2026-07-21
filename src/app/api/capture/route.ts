@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { extractChapterText } from '@/lib/oreilly-html';
+import { addTTSJob } from '@/lib/job-queue';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -81,6 +82,10 @@ export async function POST(request: Request) {
       },
     });
     created.push({ id: row.id, number: ch.number, label, words: text.split(/\s+/).length });
+
+    // Capture goes all the way: clean -> TTS -> combined chapter audio,
+    // kicked off in the background as soon as the chapter lands.
+    addTTSJob(row.id);
   }
 
   return NextResponse.json({ bookId: book.id, created, skipped }, { headers: CORS });

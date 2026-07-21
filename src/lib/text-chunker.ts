@@ -1,5 +1,37 @@
 import _ from 'lodash';
 
+/**
+ * Read-along blocks: one block per paragraph, so per-block audio durations
+ * line up exactly with what the player displays and highlights. Very long
+ * paragraphs are split on sentence boundaries to keep TTS requests sane.
+ */
+export function splitIntoSyncBlocks(text: string): string[] {
+  const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const blocks: string[] = [];
+
+  for (const para of paragraphs) {
+    if (para.split(/\s+/).length <= 250) {
+      blocks.push(para);
+      continue;
+    }
+    const sentences = para.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [para];
+    let current: string[] = [];
+    let words = 0;
+    for (const sentence of sentences) {
+      const w = sentence.trim().split(/\s+/).length;
+      if (words + w > 200 && words > 0) {
+        blocks.push(current.join(' ').trim());
+        current = [];
+        words = 0;
+      }
+      current.push(sentence.trim());
+      words += w;
+    }
+    if (current.length) blocks.push(current.join(' ').trim());
+  }
+
+  return blocks;
+}
 
 export function splitTextIntoParagraphs(text: string): string[] {
   const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);

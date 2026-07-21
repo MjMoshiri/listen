@@ -166,7 +166,8 @@ export async function convertWavToMp3Simple(inputFile: string, outputFile: strin
  * This should complete in seconds, not minutes
  */
 export async function processAudioFilesFast(inputFiles: string[], outputMp3File: string): Promise<void> {
-  const tempWavFile = outputMp3File.replace('.mp3', '_temp.wav');
+  // Derive temp path from any extension (.mp3/.ogg/etc); never same as final output
+  const tempWavFile = outputMp3File.replace(/\.[^.]+$/, '_temp.wav');
   
   try {
     const startTime = Date.now();

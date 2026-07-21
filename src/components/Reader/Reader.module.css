@@ -1,0 +1,205 @@
+.wrap {
+  min-height: 100vh;
+  background: #16181f;
+  color: #d7dde8;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem;
+  background: rgba(22, 24, 31, 0.92);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid #262a35;
+}
+
+.back {
+  color: #8a93a6;
+  text-decoration: none;
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+}
+.back:hover { color: #eaf1fb; background: #23262f; }
+
+.titles { flex: 1; min-width: 0; }
+
+.bookTitle {
+  font-size: 0.78rem;
+  color: #8a93a6;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chapterTitle {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #eaf1fb;
+  margin: 0.1rem 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav { display: flex; gap: 0.75rem; }
+.nav a {
+  color: #4f8cff;
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid rgba(79, 140, 255, 0.3);
+}
+.nav a:hover { background: rgba(79, 140, 255, 0.12); }
+.navGap { width: 0; }
+
+/* ── Generating banner ──────────────────────────────────────────────────── */
+
+.banner {
+  max-width: 46rem;
+  margin: 1.25rem auto 0;
+  padding: 1rem 1.25rem;
+  background: #1d2029;
+  border: 1px solid rgba(79, 140, 255, 0.25);
+  border-radius: 10px;
+}
+
+.bannerText { color: #9fb7e0; font-size: 0.92rem; margin-bottom: 0.6rem; }
+.bannerRow { display: flex; align-items: center; justify-content: space-between; gap: 1rem; color: #9fb7e0; font-size: 0.92rem; }
+
+.progressTrack {
+  height: 6px;
+  background: #262a35;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, #4f8cff, #6fa8ff);
+  border-radius: 3px;
+  transition: width 0.6s ease;
+}
+
+.generateBtn {
+  background: linear-gradient(135deg, #4f8cff 0%, #6fa8ff 100%);
+  color: white;
+  border: none;
+  padding: 0.55rem 1.1rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.generateBtn:hover { filter: brightness(1.1); }
+
+/* ── Text ───────────────────────────────────────────────────────────────── */
+
+.text {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 9rem;
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-size: 1.14rem;
+  line-height: 1.75;
+}
+
+.block {
+  padding: 0.45rem 0.9rem;
+  margin: 0.35rem -0.9rem;
+  border-left: 3px solid transparent;
+  border-radius: 6px;
+  transition: background 0.25s ease, border-color 0.25s ease;
+  white-space: pre-wrap;
+}
+
+.clickable { cursor: pointer; }
+.clickable:hover { background: rgba(79, 140, 255, 0.07); }
+
+.active {
+  background: rgba(79, 140, 255, 0.14);
+  border-left-color: #4f8cff;
+  color: #f2f6ff;
+}
+
+/* ── Player bar ─────────────────────────────────────────────────────────── */
+
+.bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 1.1rem calc(0.75rem + env(safe-area-inset-bottom));
+  background: rgba(24, 27, 35, 0.96);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid #262a35;
+}
+
+.play {
+  width: 2.9rem;
+  height: 2.9rem;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #4f8cff 0%, #6fa8ff 100%);
+  color: white;
+  font-size: 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.play:hover { filter: brightness(1.1); }
+
+.skip, .rateBtn, .followBtn {
+  background: #23262f;
+  color: #aeb7c7;
+  border: 1px solid #2e3340;
+  padding: 0.42rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.skip:hover, .rateBtn:hover, .followBtn:hover { color: #eaf1fb; border-color: #4f8cff; }
+
+.rateBtn {
+  color: #4f8cff;
+  font-weight: 600;
+  min-width: 3.4rem;
+}
+
+.followOn {
+  color: #4f8cff;
+  border-color: rgba(79, 140, 255, 0.5);
+  background: rgba(79, 140, 255, 0.1);
+}
+
+.time {
+  font-size: 0.8rem;
+  color: #8a93a6;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.seek {
+  flex: 1;
+  accent-color: #4f8cff;
+  min-width: 4rem;
+}
+
+@media (max-width: 640px) {
+  .time { display: none; }
+  .skip { padding: 0.42rem 0.5rem; }
+  .text { font-size: 1.05rem; }
+}

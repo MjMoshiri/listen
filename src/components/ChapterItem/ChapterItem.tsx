@@ -35,6 +35,7 @@ const ChapterItem: React.FC<ChapterItemProps> = ({
       </div>
     </div>
     <div className={styles.actions}>
+      <a className={styles.playLink} href={`/player/${id}`}>Play</a>
       <button onClick={() => onAction('edit', id)}>Edit</button>
       <button onClick={() => onAction('archive', id)}>Archive</button>
       <button onClick={() => onAction('read', id)}>Read</button>
