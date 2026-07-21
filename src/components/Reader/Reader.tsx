@@ -206,10 +206,15 @@ export default function Reader({ initial }: { initial: PlayerData }) {
   const onLoadedMetadata = () => {
     const a = audioRef.current;
     if (!a) return;
-    setAudioDuration(a.duration);
+    // Concatenated VBR mp3s report duration Infinity — fall back to the
+    // known sum of chunk durations so the total time and seek bar work.
+    const dur = isFinite(a.duration)
+      ? a.duration
+      : blocks.reduce((s, b) => s + (b.duration || 0), 0);
+    setAudioDuration(dur);
     a.playbackRate = rate;
     const saved = Number(localStorage.getItem(`listen-pos-${id}`));
-    if (saved > 1 && saved < a.duration - 5) {
+    if (saved > 1 && saved < dur - 5) {
       a.currentTime = saved;
       setActive(indexAt(saved));
     }
