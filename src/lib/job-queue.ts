@@ -135,12 +135,11 @@ async function cleanChapterText(chapterId: string, text: string): Promise<string
     console.log(`Cleaned chapter ${chapterId}`);
     return cleaned;
   } catch (error) {
+    // Do NOT fall back to raw text — that silently produces audio with
+    // citation marks etc. Fail the job; the chapter stays pending and can
+    // be re-generated from the UI.
     console.error(`Error cleaning chapter ${chapterId}:`, error);
-    await prisma.chapter.update({
-      where: { id: chapterId },
-      data: { audioText: text, hasCleaned: true },
-    });
-    return text;
+    throw error;
   } finally {
     cleaningProgress.delete(chapterId);
   }
@@ -322,9 +321,11 @@ export function addTTSJob(chapterId: string) {
     return;
   }
 
-  const promise = addChapterTTSJobAuto(chapterId).finally(() => {
-    activeChapters.delete(chapterId);
-  });
+  const promise = addChapterTTSJobAuto(chapterId)
+    .catch(err => console.error(`TTS job for chapter ${chapterId} failed:`, err))
+    .finally(() => {
+      activeChapters.delete(chapterId);
+    });
   activeChapters.set(chapterId, promise);
 }
 

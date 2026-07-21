@@ -6,6 +6,7 @@
 import { config } from '../config';
 import { getSettings, selfhostApiKey } from '../settings';
 import { splitTextIntoParagraphs } from '../text-chunker';
+import { backendFetch } from './http';
 
 const CLEAN_PROMPT =
   `Keep the full text exactly the same word for word, but take out anything ` +
@@ -29,9 +30,9 @@ async function cleanPiece(text: string): Promise<string> {
   // a thrown error here makes the whole chapter fall back to uncleaned text.
   let transientRetries = 0;
   for (let attempt = 0; ; attempt++) {
-    let res: Response;
+    let res: Awaited<ReturnType<typeof backendFetch>>;
     try {
-      res = await fetch(`${selfhost.llmUrl}/v1/chat/completions`, {
+      res = await backendFetch(`${selfhost.llmUrl}/v1/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -67,9 +68,17 @@ async function cleanPiece(text: string): Promise<string> {
       throw new Error(`Selfhost LLM ${res.status}: ${body}`);
     }
 
-    const data = await res.json();
+    const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const cleaned = data.choices?.[0]?.message?.content;
-    if (!cleaned) throw new Error('Selfhost LLM returned no text');
+    if (!cleaned) {
+      // 200 with empty content happens when generation dies mid-flight
+      // (e.g. thinking ate the slot's context) — transient, retry
+      if (transientRetries++ < 5) {
+        await new Promise(r => setTimeout(r, 5_000 * transientRetries));
+        continue;
+      }
+      throw new Error('Selfhost LLM returned no text');
+    }
     return cleaned;
   }
 }

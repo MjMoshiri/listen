@@ -4,6 +4,7 @@
  */
 
 import { getSettings, selfhostApiKey } from '../settings';
+import { backendFetch } from './http';
 
 /** Returns a complete WAV file buffer for the given text. */
 export async function synthesizeChunk(text: string): Promise<Buffer> {
@@ -11,7 +12,7 @@ export async function synthesizeChunk(text: string): Promise<Buffer> {
   if (!selfhost.on || !selfhost.ttsUrl) {
     throw new Error('Selfhost backend is off — turn it on from the dashboard');
   }
-  const res = await fetch(`${selfhost.ttsUrl}/v1/audio/speech`, {
+  const res = await backendFetch(`${selfhost.ttsUrl}/v1/audio/speech`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
