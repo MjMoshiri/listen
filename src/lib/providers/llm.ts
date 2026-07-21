@@ -25,28 +25,47 @@ async function cleanPiece(text: string): Promise<string> {
 
   // Cold start: the endpoint scales from zero and llama-server answers 503
   // while the model loads (~2 min), so wait it out instead of failing.
+  // Other transient failures (network blip, redeploy, 5xx) also retry —
+  // a thrown error here makes the whole chapter fall back to uncleaned text.
+  let transientRetries = 0;
   for (let attempt = 0; ; attempt++) {
-    const res = await fetch(`${selfhost.llmUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${selfhostApiKey()}`,
-      },
-      body: JSON.stringify({
-        model: selfhost.llmModel,
-        temperature: config.temperature,
-        messages: [
-          { role: 'system', content: CLEAN_PROMPT },
-          { role: 'user', content: text },
-        ],
-      }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${selfhost.llmUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${selfhostApiKey()}`,
+        },
+        body: JSON.stringify({
+          model: selfhost.llmModel,
+          temperature: config.temperature,
+          messages: [
+            { role: 'system', content: CLEAN_PROMPT },
+            { role: 'user', content: text },
+          ],
+        }),
+      });
+    } catch (err) {
+      if (transientRetries++ < 5) {
+        await new Promise(r => setTimeout(r, 5_000 * transientRetries));
+        continue;
+      }
+      throw err;
+    }
 
-    if (res.status === 503 && attempt < 10) {
+    if (res.status === 503 && attempt < 20) {
       await new Promise(r => setTimeout(r, 15_000));
       continue;
     }
-    if (!res.ok) throw new Error(`Selfhost LLM ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (!res.ok) {
+      const body = (await res.text()).slice(0, 300);
+      if (res.status >= 500 && transientRetries++ < 5) {
+        await new Promise(r => setTimeout(r, 5_000 * transientRetries));
+        continue;
+      }
+      throw new Error(`Selfhost LLM ${res.status}: ${body}`);
+    }
 
     const data = await res.json();
     const cleaned = data.choices?.[0]?.message?.content;
@@ -61,16 +80,27 @@ async function cleanPiece(text: string): Promise<string> {
  * outputs roughly its input size. onProgress reports pieces done/total so
  * the dashboard can show the cleaning stage moving.
  */
+// Pieces cleaned in parallel per chapter; the endpoint decodes 4 requests per
+// container and scales out, so keeping several in flight is what makes a
+// 40-piece chapter take minutes instead of an hour.
+const PIECE_CONCURRENCY = 3;
+
 export async function cleanTextForSpeech(
   text: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<string> {
   const pieces = splitTextIntoParagraphs(text);
   onProgress?.(0, pieces.length);
-  const cleaned: string[] = [];
-  for (const piece of pieces) {
-    cleaned.push(await cleanPiece(piece));
-    onProgress?.(cleaned.length, pieces.length);
-  }
+  const cleaned: string[] = new Array(pieces.length);
+  let next = 0;
+  let done = 0;
+  const workers = Array.from({ length: Math.min(PIECE_CONCURRENCY, pieces.length) }, async () => {
+    while (next < pieces.length) {
+      const i = next++;
+      cleaned[i] = await cleanPiece(pieces[i]);
+      onProgress?.(++done, pieces.length);
+    }
+  });
+  await Promise.all(workers);
   return cleaned.join('\n\n');
 }
