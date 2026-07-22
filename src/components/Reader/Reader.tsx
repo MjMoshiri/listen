@@ -9,13 +9,38 @@
  * While audio is still generating, the text is readable and progress polls.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { PlayerData } from '@/lib/player-data';
 import { blockWordStarts, wrapWords } from './word-sync';
 import styles from './Reader.module.css';
 
 const RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+
+/** Injected chapter HTML, memoized hard: the player re-renders 4×/s on time
+ *  ticks and React re-applies dangerouslySetInnerHTML on re-render, which
+ *  would wipe the word spans and highlight classes (and re-inject ~200 KB of
+ *  DOM). With stable props this never re-renders after mount. */
+const Article = memo(function Article({
+  html,
+  playable,
+  onClick,
+  innerRef,
+}: {
+  html: string;
+  playable: boolean;
+  onClick: (e: React.MouseEvent) => void;
+  innerRef: React.RefObject<HTMLElement | null>;
+}) {
+  return (
+    <article
+      ref={innerRef}
+      className={[styles.content, playable ? styles.contentPlayable : ''].join(' ')}
+      onClick={onClick}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+});
 
 function fmt(t: number): string {
   if (!isFinite(t) || t < 0) return '0:00';
@@ -115,19 +140,28 @@ export default function Reader({ initial }: { initial: PlayerData }) {
     [rich],
   );
 
-  // Highlight the active block (rich mode toggles a class on injected HTML)
+  // Highlight the active block (rich mode toggles a class on injected HTML).
+  // Query the live DOM rather than the collected list — the injected HTML can
+  // be replaced after hydration recovery, leaving collected nodes detached.
   useEffect(() => {
     if (!rich) return;
-    const el = active >= 0 ? blockEls.current[active] : null;
+    const el = active >= 0
+      ? articleRef.current?.querySelector<HTMLElement>(`[data-lb="${active}"]`) ?? null
+      : null;
     el?.classList.add('lb-active');
     return () => el?.classList.remove('lb-active');
   }, [rich, active, sourceHtml]);
 
   // Word timeline: wrap every block's words in spans and give each a start
   // time interpolated from the block's chunk durations, so the exact word
-  // being spoken can be highlighted and followed.
-  useEffect(() => {
-    words.current.els[wordAt.current]?.classList.remove('w-live');
+  // being spoken can be highlighted and followed. React can re-inject the
+  // chapter HTML after hydration recovery, detaching a built timeline —
+  // so this is a callback that syncWord re-invokes when that happens.
+  const rebuildWords = useCallback(() => {
+    if (rich && articleRef.current) {
+      blockEls.current = Array.from(articleRef.current.querySelectorAll<HTMLElement>('[data-lb]'))
+        .sort((a, b) => Number(a.dataset.lb) - Number(b.dataset.lb));
+    }
     const starts: number[] = [];
     const els: HTMLElement[] = [];
     for (let i = 0; i < blocks.length; i++) {
@@ -146,12 +180,17 @@ export default function Reader({ initial }: { initial: PlayerData }) {
     }
     words.current = { starts, els };
     wordAt.current = -1;
-  }, [rich, sourceHtml, blocks, offsets, audioDuration, blockEl]);
+  }, [rich, blocks, offsets, audioDuration, blockEl]);
+
+  useEffect(() => { rebuildWords(); }, [rebuildWords, sourceHtml]);
 
   // Move the word highlight to whatever is being spoken at time t; with
   // follow on, keep that word inside the middle band of the viewport
   // (teleprompter-style continuous scrolling).
   const syncWord = useCallback((t: number) => {
+    // Self-heal: if the injected HTML was replaced since the timeline was
+    // built, our spans are detached — rebuild against the live DOM.
+    if (!words.current.els.length || !words.current.els[0].isConnected) rebuildWords();
     const { starts, els } = words.current;
     if (!els.length) return;
     let lo = 0;
@@ -172,7 +211,7 @@ export default function Reader({ initial }: { initial: PlayerData }) {
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
       }
     }
-  }, []);
+  }, [rebuildWords]);
 
   // timeupdate only fires ~4×/s — too coarse for word tracking at 2× speed,
   // so run a rAF loop while playing.
@@ -223,6 +262,14 @@ export default function Reader({ initial }: { initial: PlayerData }) {
     }
   };
 
+  // A cached mp3 can finish loading metadata before hydration attaches the
+  // listener — the loadedmetadata event is missed, so recover on mount.
+  useEffect(() => {
+    const a = audioRef.current;
+    if (a && a.readyState >= 1) onLoadedMetadata();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapter.audioFile]);
+
   const toggle = useCallback(() => {
     const a = audioRef.current;
     if (!a) return;
@@ -259,11 +306,11 @@ export default function Reader({ initial }: { initial: PlayerData }) {
   }, [chapter.hasAudio]);
 
   // Click anywhere in the injected chapter HTML: play from that word or block
-  const onArticleClick = (e: React.MouseEvent) => {
+  const onArticleClick = useCallback((e: React.MouseEvent) => {
     if (seekWord(e.target as HTMLElement)) return;
     const hit = (e.target as HTMLElement).closest('[data-lb]') as HTMLElement | null;
     if (hit && articleRef.current?.contains(hit)) playBlock(Number(hit.dataset.lb));
-  };
+  }, [seekWord, playBlock]);
 
   const cycleRate = () => setRate(RATES[(RATES.indexOf(rate) + 1) % RATES.length]);
 
@@ -392,11 +439,11 @@ export default function Reader({ initial }: { initial: PlayerData }) {
 
       {rich ? (
         <main className={styles.page}>
-          <article
-            ref={articleRef}
-            className={[styles.content, chapter.hasAudio ? styles.contentPlayable : ''].join(' ')}
+          <Article
+            html={sourceHtml!}
+            playable={chapter.hasAudio}
             onClick={onArticleClick}
-            dangerouslySetInnerHTML={{ __html: sourceHtml! }}
+            innerRef={articleRef}
           />
         </main>
       ) : (
