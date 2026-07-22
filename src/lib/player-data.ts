@@ -37,6 +37,8 @@ export interface PlayerData {
     number: number;
     hasAudio: boolean;
     audioFile: string | null;
+    /** Server-saved resume point (seconds) — syncs listening across devices. */
+    positionSec: number;
   };
   book: { id: string; title: string };
   prevId: string | null;
@@ -144,6 +146,7 @@ export async function getPlayerData(chapterId: string): Promise<PlayerData | nul
       number: chapter.number,
       hasAudio: chapter.hasAudio,
       audioFile: chapter.audioFile,
+      positionSec: chapter.positionSec,
     },
     book: chapter.book,
     prevId,

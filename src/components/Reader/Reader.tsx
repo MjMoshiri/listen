@@ -71,6 +71,7 @@ export default function Reader({ initial }: { initial: PlayerData }) {
   const playingRef = useRef(playing);
   followRef.current = follow;
   playingRef.current = playing;
+  const lastPost = useRef(0);
   const router = useRouter();
 
   const { chapter, book, blocks, prevId, nextId, chapters, sourceHtml } = data;
@@ -225,6 +226,18 @@ export default function Reader({ initial }: { initial: PlayerData }) {
     return () => cancelAnimationFrame(raf);
   }, [playing, syncWord]);
 
+  // Persist the resume point server-side so it follows the listener across
+  // devices (phone over the tunnel, desktop at home). keepalive lets the
+  // pause-time save survive an immediate tab close.
+  const postPos = useCallback((sec: number, done = false) => {
+    fetch(`/api/player/${id}/position`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(done ? { done: true } : { sec }),
+      keepalive: true,
+    }).catch(() => { /* offline — localStorage still has it */ });
+  }, [id]);
+
   const onTimeUpdate = () => {
     const a = audioRef.current;
     if (!a) return;
@@ -232,7 +245,25 @@ export default function Reader({ initial }: { initial: PlayerData }) {
     setActive(indexAt(a.currentTime));
     syncWord(a.currentTime);
     localStorage.setItem(`listen-pos-${id}`, String(a.currentTime));
+    if (playingRef.current && performance.now() - lastPost.current > 5000) {
+      lastPost.current = performance.now();
+      postPos(a.currentTime);
+    }
   };
+
+  // Closing/backgrounding the page mid-listen: beacon the final position
+  useEffect(() => {
+    const onHide = () => {
+      const a = audioRef.current;
+      if (!a || a.currentTime <= 1 || a.ended) return;
+      navigator.sendBeacon(
+        `/api/player/${id}/position`,
+        new Blob([JSON.stringify({ sec: a.currentTime })], { type: 'application/json' }),
+      );
+    };
+    window.addEventListener('pagehide', onHide);
+    return () => window.removeEventListener('pagehide', onHide);
+  }, [id]);
 
   // Turning follow on jumps straight back to the word being spoken
   useEffect(() => {
@@ -252,7 +283,11 @@ export default function Reader({ initial }: { initial: PlayerData }) {
       : blocks.reduce((s, b) => s + (b.duration || 0), 0);
     setAudioDuration(dur);
     a.playbackRate = rate;
-    const saved = Number(localStorage.getItem(`listen-pos-${id}`));
+    // Server position wins (it may come from another device); localStorage
+    // covers chapters listened to before server sync existed.
+    const saved = chapter.positionSec > 1
+      ? chapter.positionSec
+      : Number(localStorage.getItem(`listen-pos-${id}`));
     if (saved > 1 && saved < dur - 5) {
       a.currentTime = saved;
       setActive(indexAt(saved));
@@ -330,6 +365,7 @@ export default function Reader({ initial }: { initial: PlayerData }) {
 
   const onEnded = () => {
     localStorage.removeItem(`listen-pos-${id}`);
+    postPos(0, true); // reset resume point, mark chapter read
     if (nextId) router.push(`/player/${nextId}?autoplay=1`);
   };
 
@@ -475,7 +511,11 @@ export default function Reader({ initial }: { initial: PlayerData }) {
             onTimeUpdate={onTimeUpdate}
             onLoadedMetadata={onLoadedMetadata}
             onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
+            onPause={() => {
+              setPlaying(false);
+              const a = audioRef.current;
+              if (a && !a.ended && a.currentTime > 1) postPos(a.currentTime);
+            }}
             onEnded={onEnded}
           />
           <button className={styles.play} onClick={toggle} title={playing ? 'Pause (space)' : 'Play (space)'}>

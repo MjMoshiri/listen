@@ -14,14 +14,32 @@ interface BookSummary {
   workingCount: number;
 }
 
+interface ResumeInfo {
+  chapterId: string;
+  chapterLabel: string;
+  bookTitle: string;
+  positionSec: number;
+}
+
+function fmtPos(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export default function DashboardPage() {
   const [books, setBooks] = useState<BookSummary[] | null>(null);
+  const [resume, setResume] = useState<ResumeInfo | null>(null);
 
   useEffect(() => {
     fetch('/api/books')
       .then(res => res.json())
       .then(data => setBooks(Array.isArray(data) ? data : []))
       .catch(() => setBooks([]));
+    fetch('/api/resume')
+      .then(res => res.json())
+      .then(data => { if (data?.chapterId) setResume(data); })
+      .catch(() => {});
   }, []);
 
   return (
@@ -38,6 +56,20 @@ export default function DashboardPage() {
           </Link>
         </div>
       </header>
+
+      {resume && (
+        <Link href={`/player/${resume.chapterId}`} className={styles.resume}>
+          <span className={styles.resumePlay}>▶</span>
+          <span className={styles.resumeText}>
+            <div className={styles.resumeLabel}>Continue listening</div>
+            <div className={styles.resumeChapter}>{resume.chapterLabel}</div>
+            <div className={styles.resumeMeta}>
+              {resume.bookTitle}
+              {resume.positionSec > 1 && ` · at ${fmtPos(resume.positionSec)}`}
+            </div>
+          </span>
+        </Link>
+      )}
 
       <h2 className={styles.sectionTitle}>Library</h2>
 

@@ -26,6 +26,8 @@ model Chapter {
   number     Int
   isRead     Boolean @default(false) @map("is_read")
   isArchived Boolean @default(false) @map("is_archived")
+  positionSec  Float     @default(0) @map("position_sec")   // resume point, synced across devices
+  lastPlayedAt DateTime? @map("last_played_at")             // for "continue listening"
   hasCleaned Boolean @default(false) @map("has_cleaned")
   hasAudio   Boolean @default(false) @map("has_audio")
   book       Book    @relation(fields: [bookId], references: [id], onDelete: Cascade)
